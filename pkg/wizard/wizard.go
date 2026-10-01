@@ -26,7 +26,7 @@ type Options struct {
 	Resume          bool
 	Fresh           bool
 	AllowInstall    bool
-	RunnerToken     string // glrt from create or paste
+	RunnerToken     string
 	PAT             string
 	ProjectPath     string
 	Executor        string
@@ -38,12 +38,12 @@ type Options struct {
 
 // Runner orchestrates setup stages.
 type Runner struct {
-	exec    *gitexec.Runner
-	cfg     *config.UserConfig
-	store   *state.Store
-	preset  preset.Preset
-	opts    Options
-	out     func(string)
+	exec   *gitexec.Runner
+	cfg    *config.UserConfig
+	store  *state.Store
+	preset preset.Preset
+	opts   Options
+	out    func(string)
 }
 
 // New builds a wizard runner.
@@ -93,7 +93,6 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
-	// Stage: doctor
 	doc := detect.NewDoctor(r.exec)
 	dctx, dcancel := detect.WithDoctorDeadline(ctx)
 	rep, err := doc.Run(dctx, r.opts.RequireDocker)
@@ -109,7 +108,6 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 	cp.Completed = appendUnique(cp.Completed, "doctor")
 
-	// Stage: install tools
 	inst := install.New(r.exec)
 	if _, err := inst.Ensure(ctx, install.ToolGlab, r.opts.AllowInstall || r.opts.NonInteractive); err != nil {
 		return err
@@ -126,7 +124,6 @@ func (r *Runner) Run(ctx context.Context) error {
 	cp.ConfigPath = cfgPath
 	_ = r.store.Save(cp)
 
-	// Stage: create runner
 	token := strings.TrimSpace(r.opts.RunnerToken)
 	runnerID := cp.RunnerID
 	if token == "" && runnerID == 0 {
@@ -147,7 +144,6 @@ func (r *Runner) Run(ctx context.Context) error {
 		return fmt.Errorf("wizard: runner %d exists but glrt token missing; re-create in GitLab UI or pass --token", runnerID)
 	}
 
-	// Stage: register
 	regArgs, err := gitlabrunner.BuildRegisterArgv(gitlabrunner.RegisterArgs{
 		URL:              r.gitlabURL(),
 		Token:            token,
@@ -166,7 +162,6 @@ func (r *Runner) Run(ctx context.Context) error {
 	cp.Completed = appendUnique(cp.Completed, "register")
 	_ = r.store.Save(cp)
 
-	// Stage: service
 	svc := service.New(r.exec)
 	_ = service.EnsureSingleProcess(ctx, r.exec)
 	if err := svc.Install(ctx, service.InstallOpts{

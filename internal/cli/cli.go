@@ -11,7 +11,7 @@ import (
 
 	"github.com/behaviorengineering/gitvalet/pkg/gitexec"
 	"github.com/behaviorengineering/runnerconcierge/internal/config"
-	"github.com/behaviorengineering/runnerconcierge/internal/wizard"
+	"github.com/behaviorengineering/runnerconcierge/pkg/wizard"
 	"github.com/behaviorengineering/runnerconcierge/pkg/detect"
 	"github.com/behaviorengineering/runnerconcierge/pkg/preset"
 	"github.com/behaviorengineering/runnerconcierge/pkg/service"
