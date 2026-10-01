@@ -70,6 +70,15 @@ jobs:
           if [ -f ./runnerconcierge.exe ]; then bin=./runnerconcierge.exe; fi
           "$bin" help
           "$bin" version
+
+      - name: CLI smoke doctor (host OS)
+        if: matrix.os != 'ubuntu-latest'
+        shell: bash
+        env:
+          GOWORK: off
+        run: |
+          bin=./runnerconcierge
+          if [ -f ./runnerconcierge.exe ]; then bin=./runnerconcierge.exe; fi
           "$bin" doctor || test $? = 3 || test $? = 0
 
   quality:
