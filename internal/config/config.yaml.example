@@ -1,0 +1,5 @@
+gitlab_url: https://gitlab.com
+default_executor: shell
+description_prefix: ""
+# secrets:
+#   - GITLAB_TOKEN

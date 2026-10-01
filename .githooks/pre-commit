@@ -1,0 +1,7 @@
+#!/bin/sh
+set -e
+files=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+if [ -n "$files" ]; then
+  gofmt -w $files
+  git add $files
+fi

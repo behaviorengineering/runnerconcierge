@@ -1,0 +1,37 @@
+//go:build !darwin && !windows
+
+package service
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/behaviorengineering/gitvalet/pkg/gitexec"
+	"github.com/behaviorengineering/runnerconcierge/pkg/errdefs"
+)
+
+type stubManager struct{}
+
+func newPlatformManager(exec gitexec.Exec) Manager {
+	return &stubManager{}
+}
+
+func (s *stubManager) Install(ctx context.Context, opts InstallOpts) error {
+	return errdefs.New("service.Install", errdefs.CodeUnsupportedOS, "service install supported on darwin and windows only", nil)
+}
+
+func (s *stubManager) Start(ctx context.Context) error {
+	return fmt.Errorf("service: unsupported platform")
+}
+
+func (s *stubManager) Status(ctx context.Context) (string, error) {
+	return "", fmt.Errorf("service: unsupported platform")
+}
+
+func DefaultPaths() (config, work, binary string) {
+	return "", "", ""
+}
+
+func EnsureSingleProcess(ctx context.Context, exec gitexec.Exec) error {
+	return nil
+}

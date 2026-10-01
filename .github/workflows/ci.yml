@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        go: ["1.27.0"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+
+      - name: Verify modules tidy
+        shell: bash
+        env:
+          GOWORK: off
+        run: |
+          cp go.mod go.mod.bak && cp go.sum go.sum.bak
+          go mod tidy
+          diff -u go.mod.bak go.mod
+          diff -u go.sum.bak go.sum
+          rm -f go.mod.bak go.sum.bak
+
+      - name: gofmt
+        shell: bash
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        env:
+          GOWORK: off
+        run: go vet ./...
+
+      - name: go test
+        env:
+          GOWORK: off
+        run: go test -race -count=1 ./...
+
+      - name: go build
+        env:
+          GOWORK: off
+        run: go build ./...
+
+      - name: CLI smoke
+        env:
+          GOWORK: off
+        run: |
+          go build -o runnerconcierge ./cmd/runnerconcierge
+          ./runnerconcierge help
+          ./runnerconcierge version
+          ./runnerconcierge doctor || true
