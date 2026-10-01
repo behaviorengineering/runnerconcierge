@@ -24,6 +24,7 @@ jobs:
           cache: true
 
       - name: Verify modules tidy
+        if: matrix.os == 'ubuntu-latest'
         shell: bash
         env:
           GOWORK: off
@@ -59,13 +60,16 @@ jobs:
         run: go build ./...
 
       - name: CLI smoke
+        shell: bash
         env:
           GOWORK: off
         run: |
           go build -o runnerconcierge ./cmd/runnerconcierge
-          ./runnerconcierge help
-          ./runnerconcierge version
-          ./runnerconcierge doctor || test $? = 3 || test $? = 0
+          bin=./runnerconcierge
+          if [ -f ./runnerconcierge.exe ]; then bin=./runnerconcierge.exe; fi
+          "$bin" help
+          "$bin" version
+          "$bin" doctor || test $? = 3 || test $? = 0
 
   quality:
     name: quality
