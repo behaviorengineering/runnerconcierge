@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  quality:
+  checks:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -65,4 +65,16 @@ jobs:
           go build -o runnerconcierge ./cmd/runnerconcierge
           ./runnerconcierge help
           ./runnerconcierge version
-          ./runnerconcierge doctor || true
+          ./runnerconcierge doctor || test $? = 3 || test $? = 0
+
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    needs: checks
+    if: always()
+    steps:
+      - name: Require checks matrix success
+        run: |
+          if [ "${{ needs.checks.result }}" != "success" ]; then
+            exit 1
+          fi
