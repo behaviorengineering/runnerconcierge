@@ -16,14 +16,14 @@ import (
 
 // CreateRunnerRequest is POST /user/runners payload.
 type CreateRunnerRequest struct {
-	RunnerType   string
-	ProjectID    int
-	GroupID      int
-	Description  string
-	TagList      []string
-	RunUntagged  bool
-	Locked       bool
-	Paused       bool
+	RunnerType  string
+	ProjectID   int
+	GroupID     int
+	Description string
+	TagList     []string
+	RunUntagged bool
+	Locked      bool
+	Paused      bool
 }
 
 // Client talks to GitLab runner APIs.
