@@ -63,7 +63,8 @@ func (m *windowsManager) Install(ctx context.Context, opts InstallOpts) error {
 	_, err := m.exec.Run(ctx, bin, args...)
 	if err != nil {
 		if isLogonFailure(err) {
-			return errdefs.New("service.Install", errdefs.CodeServiceLogon, "logon failure (1069); grant SeServiceLogonRight", err)
+			_ = grantSeServiceLogonRight(ctx, m.exec, domainUser)
+			return errdefs.New("service.Install", errdefs.CodeServiceLogon, "logon failure (1069); grant SeServiceLogonRight and retry", err)
 		}
 		return errdefs.New("service.Install", errdefs.CodeServiceStart, "gitlab-runner install", err)
 	}
@@ -117,6 +118,20 @@ func DefaultPaths() (config, work, binary string) {
 }
 
 // EnsureSingleProcess stops duplicate managers when possible.
+func grantSeServiceLogonRight(ctx context.Context, exec gitexec.Exec, user string) error {
+	if user == "" {
+		return nil
+	}
+	script := fmt.Sprintf(`
+$u = "%s"
+secedit /export /cfg $env:TEMP\secpol.cfg | Out-Null
+(Get-Content $env:TEMP\secpol.cfg) -replace 'SeServiceLogonRight = .*', ('SeServiceLogonRight = ' + $u) | Set-Content $env:TEMP\secpol.cfg
+secedit /configure /db secedit.sdb /cfg $env:TEMP\secpol.cfg /areas USER_RIGHTS | Out-Null
+`, strings.ReplaceAll(user, `"`, `\"`))
+	_, err := exec.Run(ctx, "powershell", "-NoProfile", "-Command", script)
+	return err
+}
+
 func EnsureSingleProcess(ctx context.Context, exec gitexec.Exec) error {
 	_, _ = exec.Run(ctx, "powershell", "-NoProfile", "-Command", "Get-Process gitlab-runner -ErrorAction SilentlyContinue | Stop-Process -Force")
 	return nil

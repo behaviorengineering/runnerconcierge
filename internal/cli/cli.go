@@ -39,6 +39,9 @@ func Run(ctx context.Context, args []string, w io.Writer) int {
 	if len(args) == 0 {
 		return runWizard(ctx, w, preset.Preset{}, nil, false)
 	}
+	if code, ok := dispatchCobra(ctx, args, w); ok {
+		return code
+	}
 	switch args[0] {
 	case "help", "-h", "--help":
 		printHelp(w)

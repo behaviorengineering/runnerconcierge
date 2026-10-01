@@ -14,6 +14,7 @@ import (
 	"github.com/behaviorengineering/runnerconcierge/pkg/gitlabrunner"
 	"github.com/behaviorengineering/runnerconcierge/pkg/install"
 	"github.com/behaviorengineering/runnerconcierge/pkg/preset"
+	"github.com/behaviorengineering/runnerconcierge/pkg/prompt"
 	"github.com/behaviorengineering/runnerconcierge/pkg/service"
 	"github.com/behaviorengineering/runnerconcierge/pkg/state"
 )
@@ -34,6 +35,7 @@ type Options struct {
 	RunUntagged     bool
 	WindowsPassword string
 	RequireDocker   bool
+	Prompter        prompt.Prompter
 }
 
 // Runner orchestrates setup stages.
@@ -77,6 +79,15 @@ func (r *Runner) Run(ctx context.Context) error {
 	ctx, cancel := ensureDeadline(ctx, 30*time.Minute)
 	defer cancel()
 
+	pr := r.opts.Prompter
+	if pr == nil {
+		if r.opts.NonInteractive {
+			pr = &prompt.NonInteractive{}
+		} else {
+			pr = prompt.ForTTY()
+		}
+	}
+
 	if r.opts.Fresh {
 		_ = r.store.Archive()
 	}
@@ -85,12 +96,32 @@ func (r *Runner) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if found && !r.opts.Fresh && !r.opts.Resume && !r.opts.NonInteractive {
+		msg := fmt.Sprintf("Incomplete setup at stage %q (runner id %d). Resume?", cp.Stage, cp.RunnerID)
+		ok, err := pr.Confirm(ctx, msg)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			_ = r.store.Archive()
+			found = false
+		} else {
+			r.opts.Resume = true
+		}
+	}
 	if !r.opts.Resume || !found {
 		cp = &state.Checkpoint{
 			Version:     1,
 			Fingerprint: detect.Fingerprint(),
 			GitLabURL:   r.gitlabURL(),
 		}
+	}
+	if runtime.GOOS == "windows" && r.opts.WindowsPassword == "" && !r.opts.NonInteractive {
+		pw, err := pr.Password(ctx, "Windows service account password (login user, not shown again)")
+		if err != nil {
+			return err
+		}
+		r.opts.WindowsPassword = pw
 	}
 
 	doc := detect.NewDoctor(r.exec)

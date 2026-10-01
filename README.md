@@ -23,7 +23,7 @@ runnerconcierge setup --non-interactive --yes \
 
 ## Forge setup
 
-After pushing to GitHub, run the prepare-go-forge script for `behaviorengineering/runnerconcierge` (branch protection, secret scan, required checks).
+See [docs/FORGE.md](docs/FORGE.md) (prepare-go-forge, branch protection, secret scan, required checks).
 
 ## License
 

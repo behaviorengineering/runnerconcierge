@@ -139,6 +139,53 @@ func (c *Client) createHTTP(ctx context.Context, req CreateRunnerRequest, pat st
 	return parsed.ID, parsed.Token, nil
 }
 
+// WhoAmI returns the authenticated GitLab username via glab.
+func (c *Client) WhoAmI(ctx context.Context) (string, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		return "", errdefs.New("WhoAmI", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	out, err := c.Exec.Run(ctx, "glab", "api", "user")
+	if err != nil {
+		return "", errdefs.New("WhoAmI", errdefs.CodeAuthUnauthorized, "glab user", err)
+	}
+	var u struct {
+		Username string `json:"username"`
+	}
+	if err := json.Unmarshal(out, &u); err != nil {
+		return "", err
+	}
+	if u.Username == "" {
+		return "", errdefs.New("WhoAmI", errdefs.CodeAuthRequired, "not logged in; run glab auth login", nil)
+	}
+	return u.Username, nil
+}
+
+// RunnerInfo is a project runner summary.
+type RunnerInfo struct {
+	ID     int    `json:"id"`
+	Online bool   `json:"online"`
+	Name   string `json:"description"`
+}
+
+// ListRunners returns runners for a project id.
+func (c *Client) ListRunners(ctx context.Context, projectID int) ([]RunnerInfo, error) {
+	if projectID <= 0 {
+		return nil, fmt.Errorf("gitlabrunner: project id required")
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		return nil, errdefs.New("ListRunners", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	out, err := c.Exec.Run(ctx, "glab", "api", fmt.Sprintf("projects/%d/runners", projectID))
+	if err != nil {
+		return nil, err
+	}
+	var list []RunnerInfo
+	if err := json.Unmarshal(out, &list); err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 // ResolveProjectID looks up numeric project id from path.
 func (c *Client) ResolveProjectID(ctx context.Context, projectPath string) (int, error) {
 	if _, ok := ctx.Deadline(); !ok {
