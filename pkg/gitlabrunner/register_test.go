@@ -7,11 +7,11 @@ import (
 
 func TestBuildRegisterArgv_noServerTags(t *testing.T) {
 	args, err := BuildRegisterArgv(RegisterArgs{
-		URL:      "https://gitlab.com/",
-		Token:    "glrt-test",
-		Name:     "host",
-		Executor: "shell",
-		Shell:    "pwsh",
+		URL:        "https://gitlab.com/",
+		Token:      "glrt-test",
+		Name:       "host",
+		Executor:   "shell",
+		Shell:      "pwsh",
 		ConfigPath: "C:\\GitLab-Runner\\config.toml",
 	})
 	if err != nil {

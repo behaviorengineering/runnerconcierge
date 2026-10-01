@@ -11,17 +11,17 @@ import (
 
 	"github.com/behaviorengineering/gitvalet/pkg/gitexec"
 	"github.com/behaviorengineering/runnerconcierge/internal/config"
-	"github.com/behaviorengineering/runnerconcierge/pkg/wizard"
 	"github.com/behaviorengineering/runnerconcierge/pkg/detect"
 	"github.com/behaviorengineering/runnerconcierge/pkg/preset"
 	"github.com/behaviorengineering/runnerconcierge/pkg/service"
+	"github.com/behaviorengineering/runnerconcierge/pkg/wizard"
 )
 
 const (
-	ExitOK       = 0
-	ExitUsage    = 2
-	ExitFail     = 1
-	ExitDoctor   = 3
+	ExitOK     = 0
+	ExitUsage  = 2
+	ExitFail   = 1
+	ExitDoctor = 3
 )
 
 var version = "dev"

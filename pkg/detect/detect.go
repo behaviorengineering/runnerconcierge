@@ -21,21 +21,21 @@ type Issue struct {
 
 // Report is the doctor output.
 type Report struct {
-	GOOS         string
-	GOARCH       string
-	Username     string
-	Elevated     bool
-	GitOK        bool
-	RunnerPath   string
-	RunnerVer    string
-	GlabPath     string
-	GlabVer      string
-	BrewOK       bool
-	WingetOK     bool
-	DockerOK     bool
-	RunnerProcs  int
-	ConfigPaths  []string
-	Issues       []Issue
+	GOOS        string
+	GOARCH      string
+	Username    string
+	Elevated    bool
+	GitOK       bool
+	RunnerPath  string
+	RunnerVer   string
+	GlabPath    string
+	GlabVer     string
+	BrewOK      bool
+	WingetOK    bool
+	DockerOK    bool
+	RunnerProcs int
+	ConfigPaths []string
+	Issues      []Issue
 }
 
 // Doctor runs preflight checks.
