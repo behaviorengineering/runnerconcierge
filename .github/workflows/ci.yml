@@ -36,6 +36,7 @@ jobs:
           rm -f go.mod.bak go.sum.bak
 
       - name: gofmt
+        if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
           unformatted=$(gofmt -l .)
