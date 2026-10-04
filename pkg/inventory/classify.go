@@ -11,7 +11,8 @@ import (
 
 func classifyOwnership(loginUser string, svc service.Ownership, cfgPath string) []Finding {
 	var out []Finding
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		if service.IsLocalSystemLogon(svc.LogonUser) {
 			out = append(out, Finding{
 				Code:       errdefs.CodeBadServiceLogon,
@@ -31,7 +32,7 @@ func classifyOwnership(loginUser string, svc service.Ownership, cfgPath string) 
 				Repairable: true,
 			})
 		}
-	} else if runtime.GOOS == "darwin" {
+	case "darwin":
 		if svc.LogonUser != "" && !service.UsersMatch(loginUser, svc.LogonUser) {
 			out = append(out, Finding{
 				Code:       errdefs.CodeWrongServiceUser,

@@ -33,9 +33,9 @@ type Options struct {
 
 // Result holds before/after inventory and backup path.
 type Result struct {
-	Before       *inventory.Report
-	After        *inventory.Report
-	BackupPath   string
+	Before     *inventory.Report
+	After      *inventory.Report
+	BackupPath string
 }
 
 // Run uninstalls a bad service unit and reinstalls under the login user.
@@ -229,9 +229,9 @@ func PrintResult(w io.Writer, res *Result) {
 	if res == nil {
 		return
 	}
-	fmt.Fprintf(w, "backup: %s\n\n", res.BackupPath)
-	fmt.Fprintln(w, "before:")
+	_, _ = fmt.Fprintf(w, "backup: %s\n\n", res.BackupPath)
+	_, _ = fmt.Fprintln(w, "before:")
 	_ = inventory.Render(w, res.Before)
-	fmt.Fprintln(w, "\nafter:")
+	_, _ = fmt.Fprintln(w, "\nafter:")
 	_ = inventory.Render(w, res.After)
 }

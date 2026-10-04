@@ -9,33 +9,54 @@ import (
 	"github.com/behaviorengineering/runnerconcierge/pkg/redact"
 )
 
+func writef(w io.Writer, format string, args ...any) error {
+	_, err := fmt.Fprintf(w, format, args...)
+	return err
+}
+
 // Render writes a human-readable status report.
 func Render(w io.Writer, rep *Report) error {
 	if rep == nil {
 		return fmt.Errorf("inventory: report is nil")
 	}
-	fmt.Fprintf(w, "os=%s arch=%s login_user=%s elevated=%v runner=%s\n\n",
-		rep.GOOS, rep.GOARCH, rep.LoginUser, rep.Elevated, rep.RunnerVer)
+	if err := writef(w, "os=%s arch=%s login_user=%s elevated=%v runner=%s\n\n",
+		rep.GOOS, rep.GOARCH, rep.LoginUser, rep.Elevated, rep.RunnerVer); err != nil {
+		return err
+	}
 	for _, c := range rep.Configs {
-		fmt.Fprintf(w, "config: %s readable=%v system=%v runners=%d\n", c.Path, c.Readable, c.SystemPath, len(c.Runners))
+		if err := writef(w, "config: %s readable=%v system=%v runners=%d\n", c.Path, c.Readable, c.SystemPath, len(c.Runners)); err != nil {
+			return err
+		}
 		for _, r := range c.Runners {
-			fmt.Fprintf(w, "  - name=%s url=%s executor=%s\n", r.Name, redact.String(r.URL), r.Executor)
+			if err := writef(w, "  - name=%s url=%s executor=%s\n", r.Name, redact.String(r.URL), r.Executor); err != nil {
+				return err
+			}
 		}
 	}
 	for _, s := range rep.Services {
-		fmt.Fprintf(w, "service: name=%s kind=%s state=%s logon=%s config=%s\n",
-			s.ServiceName, s.Kind, s.State, s.LogonUser, s.ConfigPath)
+		if err := writef(w, "service: name=%s kind=%s state=%s logon=%s config=%s\n",
+			s.ServiceName, s.Kind, s.State, s.LogonUser, s.ConfigPath); err != nil {
+			return err
+		}
 	}
 	if len(rep.Findings) > 0 {
-		fmt.Fprintln(w, "\nfindings:")
+		if _, err := fmt.Fprintln(w, "\nfindings:"); err != nil {
+			return err
+		}
 		for _, f := range rep.Findings {
-			fmt.Fprintf(w, "  [%s] block=%v repairable=%v %s\n", f.Code, f.Block, f.Repairable, redact.String(f.Message))
+			if err := writef(w, "  [%s] block=%v repairable=%v %s\n", f.Code, f.Block, f.Repairable, redact.String(f.Message)); err != nil {
+				return err
+			}
 		}
 	}
 	if len(rep.NextActions) > 0 {
-		fmt.Fprintln(w, "\nnext actions:")
+		if _, err := fmt.Fprintln(w, "\nnext actions:"); err != nil {
+			return err
+		}
 		for _, a := range rep.NextActions {
-			fmt.Fprintf(w, "  - %s\n", a)
+			if err := writef(w, "  - %s\n", a); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -64,7 +85,7 @@ func HasBlocking(rep *Report) bool {
 	return false
 }
 
-// FindingsForService returns findings tied to a config path.
+// FindingsForConfig returns findings tied to a config path.
 func FindingsForConfig(rep *Report, configPath string) []Finding {
 	if rep == nil {
 		return nil
