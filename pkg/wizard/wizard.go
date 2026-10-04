@@ -207,7 +207,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	} else if err != nil {
 		return err
 	}
-	if err := svc.Start(ctx); err != nil {
+	if err := svc.Start(ctx, service.StartOpts{}); err != nil {
 		return err
 	}
 	cp.Completed = appendUnique(cp.Completed, "service")

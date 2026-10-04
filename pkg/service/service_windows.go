@@ -60,6 +60,9 @@ func (m *windowsManager) Install(ctx context.Context, opts InstallOpts) error {
 		"--config", cfg,
 		"--working-directory", work,
 	}
+	if strings.TrimSpace(opts.ServiceName) != "" {
+		args = append(args, "--service", strings.TrimSpace(opts.ServiceName))
+	}
 	_, err := m.exec.Run(ctx, bin, args...)
 	if err != nil {
 		if isLogonFailure(err) {
@@ -72,8 +75,12 @@ func (m *windowsManager) Install(ctx context.Context, opts InstallOpts) error {
 	return nil
 }
 
-func (m *windowsManager) Start(ctx context.Context) error {
-	_, err := m.exec.Run(ctx, "gitlab-runner", "start")
+func (m *windowsManager) Start(ctx context.Context, opts StartOpts) error {
+	args := []string{"start"}
+	if strings.TrimSpace(opts.ServiceName) != "" {
+		args = append(args, "--service", strings.TrimSpace(opts.ServiceName))
+	}
+	_, err := m.exec.Run(ctx, "gitlab-runner", args...)
 	return err
 }
 

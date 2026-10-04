@@ -22,6 +22,7 @@ Operate the runnerconcierge GitLab runner setup CLI.
 
 ## E2E live
 
-- `make e2e-live` on macOS and Windows before releases that touch status/repair.
-- Modes: `E2E_LIVE_MODE=fixture` (default), `observe`, `repair-prod` (requires `E2E_LIVE_ALLOW_PROD=1`).
-- Windows fixture mode needs an elevated session.
+- Local: `E2E_LIVE_MODE=fixture make e2e-live` (Go fixture in `internal/e2elive/fixture`; no GitLab registration token).
+- GitHub: manual **e2e-live** workflow (`workflow_dispatch`); same `make e2e-live` on hosted runners.
+- Refuses to seed if a gitlab-runner service already exists unless `E2E_LIVE_ALLOW_EXISTING=1`.
+- `repair-prod` observe path: `E2E_LIVE_ALLOW_PROD=1` (not used on GHA).
