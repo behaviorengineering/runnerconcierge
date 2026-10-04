@@ -45,6 +45,13 @@ PROHIBITED:
 
 ## Cleanup package
 
+**CONSTRAINT:** `wizard.Run` MUST call `cleanup.EnsureSchedule` after the gitlab-runner service starts (macOS/Windows, `AllowYes` true) so every setup installs the helper regardless of executor.
+
+- MUST: no-op `EnsureSchedule` on Linux; non-interactive setup fails if schedule install fails on supported OS
+- MUST NOT: gate cleanup install on docker executor only
+- Enforcement: `pkg/wizard/wizard.go` after service start; checkpoint may include `cleanup_schedule`
+- Violation: STOP, wire EnsureSchedule before verify/online wait
+
 **CONSTRAINT:** Docker leftover prune MUST live in `pkg/cleanup` with `Config.Create()`.
 
 - MUST: panic when `Exec` is nil; error when `Out` is nil

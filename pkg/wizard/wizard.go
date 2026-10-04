@@ -3,6 +3,7 @@ package wizard
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/behaviorengineering/gitvalet/pkg/gitexec"
 	"github.com/behaviorengineering/runnerconcierge/internal/config"
+	"github.com/behaviorengineering/runnerconcierge/pkg/cleanup"
 	"github.com/behaviorengineering/runnerconcierge/pkg/detect"
 	"github.com/behaviorengineering/runnerconcierge/pkg/errdefs"
 	"github.com/behaviorengineering/runnerconcierge/pkg/gitlabrunner"
@@ -219,6 +221,16 @@ func (r *Runner) Run(ctx context.Context) error {
 	cp.Completed = appendUnique(cp.Completed, "service")
 	_ = r.store.Save(cp)
 
+	if err := cleanup.EnsureSchedule(ctx, r.exec, lineOut(r.out), true); err != nil {
+		if r.opts.NonInteractive {
+			return errdefs.New("setup", errdefs.CodeServiceStart, "could not install docker cleanup schedule", err)
+		}
+		r.out("cleanup schedule: " + err.Error())
+	} else if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		cp.Completed = appendUnique(cp.Completed, "cleanup_schedule")
+		_ = r.store.Save(cp)
+	}
+
 	if runnerID > 0 {
 		if err := client.WaitOnline(ctx, runnerID, 2*time.Minute); err != nil {
 			return err
@@ -302,6 +314,24 @@ func appendUnique(list []string, item string) []string {
 		}
 	}
 	return append(list, item)
+}
+
+type lineOutWriter struct {
+	fn func(string)
+}
+
+func (w lineOutWriter) Write(p []byte) (int, error) {
+	if w.fn != nil && len(p) > 0 {
+		w.fn(strings.TrimRight(string(p), "\n"))
+	}
+	return len(p), nil
+}
+
+func lineOut(fn func(string)) io.Writer {
+	if fn == nil {
+		return io.Discard
+	}
+	return lineOutWriter{fn: fn}
 }
 
 func ensureDeadline(ctx context.Context, d time.Duration) (context.Context, context.CancelFunc) {

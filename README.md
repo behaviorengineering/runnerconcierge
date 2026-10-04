@@ -11,7 +11,7 @@ make hooks-install
 make build
 ./bin/runnerconcierge init
 ./bin/runnerconcierge        # agent operating guide (no setup)
-./bin/runnerconcierge setup  # setup wizard (interactive or --non-interactive --yes)
+./bin/runnerconcierge setup  # setup wizard; on macOS/Windows also installs docker cleanup schedule
 ./bin/runnerconcierge doctor
 ./bin/runnerconcierge status
 ```

@@ -72,7 +72,7 @@ Read-only (safe to run first):
 Changes this machine or GitLab:
 
 - `runnerconcierge init`: seed user `config.yaml`
-- `runnerconcierge setup`: wizard (`--repo group/project` required to create a project runner; `--non-interactive --yes` for automation)
+- `runnerconcierge setup`: wizard (`--repo group/project` required to create a project runner; `--non-interactive --yes` for automation). On macOS and Windows, setup also installs the `runnerconcierge-docker-cleanup` schedule (all executor types; safe when Docker is unused)
 - `runnerconcierge repair-service --runner-config PATH`: rebind the **gitlab-runner** service to the login user (`--yes`; Windows password via prompt, `--windows-password`, or `RUNNERCONCIERGE_WINDOWS_PASSWORD`)
 - `runnerconcierge cleanup`: one-shot prune of exited `runner-*` containers older than `--min-age` (default 1h) and dangling `runner-*` volumes. Docker down → skip, exit 0
 - `runnerconcierge cleanup install --yes`: register the periodic helper (macOS LaunchAgent, Windows Task Scheduler). `--yes` replaces legacy helpers whose command basename is `gitlab-runner-docker-cleanup`
@@ -98,7 +98,7 @@ Same prune command on both OSes. Install is the OS schedule, not a shell script.
 
 **CONSTRAINT:** MUST install the Go helper; MUST NOT add bash, zsh, or PowerShell prune scripts.
 
-- MUST: `cleanup install --yes` after a docker-executor runner exists when leftovers should be pruned on a timer
+- MUST: rely on `setup` to install the schedule on macOS/Windows; use `cleanup install --yes` for existing installs or to repair the helper
 - MUST NOT: write `~/bin/gitlab-runner-docker-cleanup` or a host-branded LaunchAgent label
 - Enforcement: helper command argv is this binary plus `cleanup`
 - Violation: STOP, uninstall the script helper with `--yes`, install the product unit
