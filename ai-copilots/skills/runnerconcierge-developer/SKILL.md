@@ -6,7 +6,8 @@ Extend runnerconcierge packages and wizard stages.
 
 - `cmd/runnerconcierge`: olly init, cli entry
 - `internal/cli`, `internal/wizard`, `internal/config`
-- `pkg/detect`, `pkg/install`, `pkg/gitlabrunner`, `pkg/service`, `pkg/state`, `pkg/redact`, `pkg/preset`, `pkg/errdefs`
+- `pkg/detect`, `pkg/install`, `pkg/gitlabrunner`, `pkg/service`, `pkg/inventory`, `pkg/repair`, `pkg/state`, `pkg/redact`, `pkg/preset`, `pkg/errdefs`
+- `internal/e2elive` (`e2e_live` build tag)
 
 ## Tests
 

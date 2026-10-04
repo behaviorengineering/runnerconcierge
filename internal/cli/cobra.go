@@ -68,6 +68,39 @@ func dispatchCobra(ctx context.Context, args []string, w io.Writer) (int, bool) 
 		},
 	}
 
+	statusCmd := &cobra.Command{
+		Use:   "status",
+		Short: "Runner inventory and smells",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			code := runStatus(ctx, statusArgs(cmd), w)
+			if code == ExitDoctor {
+				return fmt.Errorf("status found blocking issues")
+			}
+			if code != ExitOK {
+				return fmt.Errorf("status failed")
+			}
+			return nil
+		},
+	}
+	statusCmd.Flags().Bool("json", false, "JSON output")
+	statusCmd.Flags().StringArray("runner-config", nil, "extra runner config.toml paths")
+
+	repairCmd := &cobra.Command{
+		Use:   "repair-service",
+		Short: "Rebind runner service to login user",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if runRepairService(ctx, repairArgs(cmd), w) != ExitOK {
+				return fmt.Errorf("repair-service failed")
+			}
+			return nil
+		},
+	}
+	repairCmd.Flags().String("runner-config", "", "runner config.toml path")
+	repairCmd.Flags().String("service", "", "service name when multiple")
+	repairCmd.Flags().Bool("yes", false, "allow destructive repair")
+	repairCmd.Flags().String("windows-password", "", "Windows service password")
+	repairCmd.Flags().Bool("brew", false, "use brew services on macOS")
+
 	setupFlags := &wizard.Options{Preset: preset.Preset{}}
 	var setupTagList string
 	setupCmd := &cobra.Command{
@@ -99,7 +132,7 @@ func dispatchCobra(ctx context.Context, args []string, w io.Writer) (int, bool) 
 		},
 	}
 
-	root.AddCommand(initCmd, doctorCmd, verifyCmd, setupCmd, versionCmd, helpCmd)
+	root.AddCommand(initCmd, doctorCmd, verifyCmd, statusCmd, repairCmd, setupCmd, versionCmd, helpCmd)
 	root.SetArgs(args)
 	if err := root.Execute(); err != nil {
 		if strings.Contains(err.Error(), "unknown command") {

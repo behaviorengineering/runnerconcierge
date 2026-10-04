@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build test tidy fmt vet lint smoke hooks-install ci init
+.PHONY: help build test tidy fmt vet lint smoke hooks-install ci init e2e-live
 
 GOWORK ?= off
 
@@ -40,3 +40,6 @@ smoke: build ## Smoke-test CLI surfaces
 	./bin/runnerconcierge unknown || test $$? = 2
 
 ci: tidy fmt vet test build smoke ## CI aggregate
+
+e2e-live: ## Live status/repair E2E (darwin/windows only; not CI)
+	GOWORK=$(GOWORK) go test -tags=e2e_live -count=1 -timeout 30m ./internal/e2elive/...
