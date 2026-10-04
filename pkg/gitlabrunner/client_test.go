@@ -37,6 +37,7 @@ func TestCreateRunnerHTTP(t *testing.T) {
 	defer cancel()
 	id, tok, err := client.CreateRunner(ctx, CreateRunnerRequest{
 		RunnerType:  "project_type",
+		ProjectID:   1,
 		Description: "test",
 		TagList:     []string{"ci"},
 	}, "glpat-test")
@@ -48,5 +49,21 @@ func TestCreateRunnerHTTP(t *testing.T) {
 	}
 }
 
-// ensure fakeExec satisfies interface at compile time
+func TestDeleteRunnerHTTP(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != "/api/v4/runners/9" {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	client := NewClient(srv.URL, &fakeExec{}, srv.Client())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := client.DeleteRunner(ctx, 9, "glpat-test"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 var _ gitexec.Exec = (*fakeExec)(nil)

@@ -11,9 +11,16 @@ type InstallOpts struct {
 	BinaryPath       string
 	ConfigPath       string
 	WorkingDirectory string
+	ServiceName      string
 	WindowsUser      string
 	WindowsPassword  string // memory only; never persisted
+	User             string // darwin gitlab-runner install --user (login user)
 	UseBrewServices  bool
+}
+
+// StartOpts configures service start.
+type StartOpts struct {
+	ServiceName string
 }
 
 // Ownership describes a discovered runner service unit.
@@ -36,7 +43,7 @@ type UninstallOpts struct {
 // Manager installs and starts the runner service.
 type Manager interface {
 	Install(ctx context.Context, opts InstallOpts) error
-	Start(ctx context.Context) error
+	Start(ctx context.Context, opts StartOpts) error
 	Status(ctx context.Context) (string, error)
 	Uninstall(ctx context.Context, opts UninstallOpts) error
 	ListOwnership(ctx context.Context) ([]Ownership, error)

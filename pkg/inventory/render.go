@@ -6,60 +6,196 @@ import (
 	"io"
 	"strings"
 
+	"github.com/behaviorengineering/runnerconcierge/pkg/cliformat"
 	"github.com/behaviorengineering/runnerconcierge/pkg/redact"
+	"github.com/behaviorengineering/runnerconcierge/pkg/service"
 )
 
-func writef(w io.Writer, format string, args ...any) error {
-	_, err := fmt.Fprintf(w, format, args...)
-	return err
+func writeln(w io.Writer, format string, args ...any) error {
+	return cliformat.Writeln(w, format, args...)
 }
 
-// Render writes a human-readable status report.
+// Render writes a human-readable status report with labeled sections.
 func Render(w io.Writer, rep *Report) error {
 	if rep == nil {
 		return fmt.Errorf("inventory: report is nil")
 	}
-	if err := writef(w, "os=%s arch=%s login_user=%s elevated=%v runner=%s\n\n",
-		rep.GOOS, rep.GOARCH, rep.LoginUser, rep.Elevated, rep.RunnerVer); err != nil {
+	if err := writeln(w, "Host"); err != nil {
 		return err
 	}
-	for _, c := range rep.Configs {
-		if err := writef(w, "config: %s readable=%v system=%v runners=%d\n", c.Path, c.Readable, c.SystemPath, len(c.Runners)); err != nil {
+	if err := writeln(w, "  OS:                  %s/%s", rep.GOOS, rep.GOARCH); err != nil {
+		return err
+	}
+	if err := writeln(w, "  Login user:          %s", cliformat.EmptyDash(rep.LoginUser)); err != nil {
+		return err
+	}
+	if err := writeln(w, "  Elevated:            %s", cliformat.YesNo(rep.Elevated)); err != nil {
+		return err
+	}
+	if strings.TrimSpace(rep.RunnerBinary) != "" {
+		if err := writeln(w, "  gitlab-runner path:  %s", rep.RunnerBinary); err != nil {
 			return err
 		}
+	}
+	if err := writeln(w, "  gitlab-runner:       %s", cliformat.CompactVersion(rep.RunnerVer)); err != nil {
+		return err
+	}
+	if err := writeln(w, ""); err != nil {
+		return err
+	}
+	if err := writeln(w, "Registered runners"); err != nil {
+		return err
+	}
+	if err := writeln(w, "  GitLab [[runners]] entries from config.toml."); err != nil {
+		return err
+	}
+	if err := writeln(w, "  System path yes means /etc or Program Files, not the login-user file."); err != nil {
+		return err
+	}
+	if len(rep.Configs) == 0 {
+		if err := writeln(w, "  (none found)"); err != nil {
+			return err
+		}
+	}
+	for _, c := range rep.Configs {
+		if err := writeln(w, ""); err != nil {
+			return err
+		}
+		if err := writeln(w, "  File:          %s", c.Path); err != nil {
+			return err
+		}
+		if err := writeln(w, "  Readable:      %s", cliformat.YesNo(c.Readable)); err != nil {
+			return err
+		}
+		if err := writeln(w, "  System path:   %s", cliformat.YesNo(c.SystemPath)); err != nil {
+			return err
+		}
+		if len(c.Runners) == 0 {
+			if err := writeln(w, "  Entries:       (none)"); err != nil {
+				return err
+			}
+			continue
+		}
 		for _, r := range c.Runners {
-			if err := writef(w, "  - name=%s url=%s executor=%s\n", r.Name, redact.String(r.URL), r.Executor); err != nil {
+			if err := writeln(w, "  - %s", cliformat.EmptyDash(r.Name)); err != nil {
+				return err
+			}
+			if err := writeln(w, "      URL:       %s", redact.String(r.URL)); err != nil {
+				return err
+			}
+			if err := writeln(w, "      Executor:  %s", cliformat.EmptyDash(r.Executor)); err != nil {
 				return err
 			}
 		}
 	}
+	if err := writeln(w, ""); err != nil {
+		return err
+	}
+	if err := writeln(w, "Services"); err != nil {
+		return err
+	}
+	if err := writeln(w, "  How gitlab-runner is kept alive (launchd, Homebrew, or Windows)."); err != nil {
+		return err
+	}
+	if brewLaunchdOverlap(rep.Services) {
+		if err := writeln(w, "  Note: brew_services gitlab-runner and sh.brew.gitlab-runner are the same Homebrew runner."); err != nil {
+			return err
+		}
+	}
+	if len(rep.Services) == 0 {
+		if err := writeln(w, "  (none found)"); err != nil {
+			return err
+		}
+	}
 	for _, s := range rep.Services {
-		if err := writef(w, "service: name=%s kind=%s state=%s logon=%s config=%s\n",
-			s.ServiceName, s.Kind, s.State, s.LogonUser, s.ConfigPath); err != nil {
+		if err := writeln(w, ""); err != nil {
+			return err
+		}
+		if err := writeln(w, "  - %s", cliformat.EmptyDash(s.ServiceName)); err != nil {
+			return err
+		}
+		if err := writeln(w, "      Kind:      %s", serviceKindLabel(s.Kind, s.ServiceName)); err != nil {
+			return err
+		}
+		if err := writeln(w, "      State:     %s", cliformat.EmptyDash(s.State)); err != nil {
+			return err
+		}
+		if err := writeln(w, "      Logon:     %s", cliformat.EmptyDash(s.LogonUser)); err != nil {
+			return err
+		}
+		cfg := strings.TrimSpace(s.ConfigPath)
+		if cfg == "" {
+			cfg = "(not recorded on this unit)"
+		}
+		if err := writeln(w, "      Config:    %s", cfg); err != nil {
 			return err
 		}
 	}
 	if len(rep.Findings) > 0 {
-		if _, err := fmt.Fprintln(w, "\nfindings:"); err != nil {
+		if err := writeln(w, ""); err != nil {
+			return err
+		}
+		if err := writeln(w, "Findings"); err != nil {
+			return err
+		}
+		if err := writeln(w, "  Smells and blockers. block=yes means setup or repair should stop."); err != nil {
 			return err
 		}
 		for _, f := range rep.Findings {
-			if err := writef(w, "  [%s] block=%v repairable=%v %s\n", f.Code, f.Block, f.Repairable, redact.String(f.Message)); err != nil {
+			if err := writeln(w, "  - [%s]  block=%s  repairable=%s", f.Code, cliformat.YesNo(f.Block), cliformat.YesNo(f.Repairable)); err != nil {
+				return err
+			}
+			if err := writeln(w, "      %s", redact.String(f.Message)); err != nil {
 				return err
 			}
 		}
 	}
 	if len(rep.NextActions) > 0 {
-		if _, err := fmt.Fprintln(w, "\nnext actions:"); err != nil {
+		if err := writeln(w, ""); err != nil {
+			return err
+		}
+		if err := writeln(w, "Next actions"); err != nil {
 			return err
 		}
 		for _, a := range rep.NextActions {
-			if err := writef(w, "  - %s\n", a); err != nil {
+			if err := writeln(w, "  - %s", a); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func serviceKindLabel(kind, name string) string {
+	switch kind {
+	case "brew_services":
+		return "brew_services  (Homebrew `brew services` formula)"
+	case "launchd":
+		if strings.HasPrefix(name, "sh.brew.") {
+			return "launchd  (macOS unit generated by Homebrew)"
+		}
+		return "launchd  (macOS LaunchAgent or LaunchDaemon)"
+	case "windows_service":
+		return "windows_service  (Windows SCM)"
+	default:
+		if strings.TrimSpace(kind) == "" {
+			return "-"
+		}
+		return kind
+	}
+}
+
+func brewLaunchdOverlap(list []service.Ownership) bool {
+	var brew, brewPlist bool
+	for _, s := range list {
+		if s.Kind == "brew_services" && s.ServiceName == "gitlab-runner" {
+			brew = true
+		}
+		if s.Kind == "launchd" && s.ServiceName == "sh.brew.gitlab-runner" {
+			brewPlist = true
+		}
+	}
+	return brew && brewPlist
 }
 
 // RenderJSON writes the report as JSON (no runner tokens).
@@ -79,6 +215,27 @@ func HasBlocking(rep *Report) bool {
 	}
 	for _, f := range rep.Findings {
 		if f.Block {
+			return true
+		}
+	}
+	return false
+}
+
+// HasBlockingForTarget reports blocking findings scoped to one config path and/or service name.
+func HasBlockingForTarget(rep *Report, configPath, serviceName string) bool {
+	if rep == nil {
+		return false
+	}
+	configPath = strings.TrimSpace(configPath)
+	serviceName = strings.TrimSpace(serviceName)
+	for _, f := range rep.Findings {
+		if !f.Block {
+			continue
+		}
+		if configPath != "" && f.ConfigPath == configPath {
+			return true
+		}
+		if serviceName != "" && f.Service == serviceName {
 			return true
 		}
 	}

@@ -60,6 +60,9 @@ func (m *windowsManager) Install(ctx context.Context, opts InstallOpts) error {
 		"--config", cfg,
 		"--working-directory", work,
 	}
+	if strings.TrimSpace(opts.ServiceName) != "" {
+		args = append(args, "--service", strings.TrimSpace(opts.ServiceName))
+	}
 	_, err := m.exec.Run(ctx, bin, args...)
 	if err != nil {
 		if isLogonFailure(err) {
@@ -72,17 +75,27 @@ func (m *windowsManager) Install(ctx context.Context, opts InstallOpts) error {
 	return nil
 }
 
-func (m *windowsManager) Start(ctx context.Context) error {
-	_, err := m.exec.Run(ctx, "gitlab-runner", "start")
+func (m *windowsManager) Start(ctx context.Context, opts StartOpts) error {
+	args := []string{"start"}
+	if strings.TrimSpace(opts.ServiceName) != "" {
+		args = append(args, "--service", strings.TrimSpace(opts.ServiceName))
+	}
+	_, err := m.exec.Run(ctx, "gitlab-runner", args...)
 	return err
 }
 
 func (m *windowsManager) Status(ctx context.Context) (string, error) {
-	out, err := m.exec.Run(ctx, "gitlab-runner", "status")
-	if err != nil {
-		return "", err
+	if _, ok := ctx.Deadline(); !ok {
+		return "", errdefs.New("service.Status", errdefs.CodeMissingDeadline, "context missing deadline", nil)
 	}
-	return strings.TrimSpace(string(out)), nil
+	out, err := m.exec.Run(ctx, "gitlab-runner", "status")
+	if err == nil {
+		return nativeStatusLine(out), nil
+	}
+	if gitlabServiceNotInstalled(err) {
+		return "", errdefs.New("service.Status", errdefs.CodeServiceMissing, "gitlab-runner service is not installed", nil)
+	}
+	return "", errdefs.New("service.Status", errdefs.CodeServiceStart, "gitlab-runner status failed", err)
 }
 
 func (m *windowsManager) Uninstall(ctx context.Context, opts UninstallOpts) error {

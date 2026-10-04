@@ -31,12 +31,18 @@ func (m *darwinManager) Install(ctx context.Context, opts InstallOpts) error {
 		}
 		return nil
 	}
-	args := []string{"install", "--user", m.execUser()}
+	args := []string{"install"}
+	if strings.TrimSpace(opts.ServiceName) != "" {
+		args = append(args, "--service", strings.TrimSpace(opts.ServiceName))
+	}
 	if opts.WorkingDirectory != "" {
 		args = append(args, "--working-directory", opts.WorkingDirectory)
 	}
 	if opts.ConfigPath != "" {
 		args = append(args, "--config", opts.ConfigPath)
+	}
+	if strings.TrimSpace(opts.User) != "" {
+		args = append(args, "--user", strings.TrimSpace(opts.User))
 	}
 	_, err := m.exec.Run(ctx, "gitlab-runner", args...)
 	if err != nil {
@@ -45,9 +51,13 @@ func (m *darwinManager) Install(ctx context.Context, opts InstallOpts) error {
 	return nil
 }
 
-func (m *darwinManager) Start(ctx context.Context) error {
+func (m *darwinManager) Start(ctx context.Context, opts StartOpts) error {
 	if _, ok := ctx.Deadline(); !ok {
 		return errdefs.New("service.Start", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	if strings.TrimSpace(opts.ServiceName) != "" {
+		_, err := m.exec.Run(ctx, "gitlab-runner", "start", "--service", strings.TrimSpace(opts.ServiceName))
+		return err
 	}
 	if _, err := m.exec.LookPath("brew"); err == nil {
 		_, err := m.exec.Run(ctx, "brew", "services", "restart", "gitlab-runner")
@@ -58,11 +68,26 @@ func (m *darwinManager) Start(ctx context.Context) error {
 }
 
 func (m *darwinManager) Status(ctx context.Context) (string, error) {
-	out, err := m.exec.Run(ctx, "gitlab-runner", "status")
-	if err != nil {
-		return "", err
+	if _, ok := ctx.Deadline(); !ok {
+		return "", errdefs.New("service.Status", errdefs.CodeMissingDeadline, "context missing deadline", nil)
 	}
-	return strings.TrimSpace(string(out)), nil
+	out, err := m.exec.Run(ctx, "gitlab-runner", "status")
+	if err == nil {
+		return nativeStatusLine(out), nil
+	}
+	if !gitlabServiceNotInstalled(err) {
+		return "", errdefs.New("service.Status", errdefs.CodeServiceStart, "gitlab-runner status failed", err)
+	}
+	if _, lookErr := m.exec.LookPath("brew"); lookErr == nil {
+		list, brewErr := m.exec.Run(ctx, "brew", "services", "list")
+		if brewErr != nil {
+			return "", errdefs.New("service.Status", errdefs.CodeServiceStart, "brew services list failed", brewErr)
+		}
+		if line := brewGitLabRunnerStatusLine(string(list)); line != "" {
+			return line, nil
+		}
+	}
+	return "", errdefs.New("service.Status", errdefs.CodeServiceMissing, "gitlab-runner service is not installed via GitLab or brew", nil)
 }
 
 func (m *darwinManager) Uninstall(ctx context.Context, opts UninstallOpts) error {
@@ -82,13 +107,56 @@ func (m *darwinManager) Uninstall(ctx context.Context, opts UninstallOpts) error
 	if bin == "" {
 		return errdefs.New("service.Uninstall", errdefs.CodeRunnerBinaryMissing, "gitlab-runner not on PATH", nil)
 	}
-	_, _ = m.exec.Run(ctx, bin, "stop")
-	args := []string{"uninstall"}
-	_, err := m.exec.Run(ctx, bin, args...)
-	if err != nil {
-		return errdefs.New("service.Uninstall", errdefs.CodeServiceStart, "gitlab-runner uninstall", err)
+	svc := strings.TrimSpace(opts.ServiceName)
+	useSudo := svc != "" && darwinSystemPlist(svc)
+	err := m.darwinUninstall(ctx, bin, svc, useSudo)
+	if err != nil && !useSudo && svc != "" && darwinSystemPlist(svc) {
+		err = m.darwinUninstall(ctx, bin, svc, true)
 	}
-	return nil
+	return err
+}
+
+func darwinSystemPlist(serviceName string) bool {
+	if strings.TrimSpace(serviceName) == "" {
+		return false
+	}
+	_, err := os.Stat("/Library/LaunchDaemons/" + serviceName + ".plist")
+	return err == nil
+}
+
+func (m *darwinManager) darwinUninstall(ctx context.Context, bin, svc string, sudo bool) error {
+	run := func(args ...string) error {
+		if sudo {
+			return darwinRunSudo(ctx, m.exec, bin, args...)
+		}
+		_, err := m.exec.Run(ctx, bin, args...)
+		return err
+	}
+	if svc != "" {
+		_ = run("stop", "--service", svc)
+	} else {
+		_ = run("stop")
+	}
+	args := []string{"uninstall"}
+	if svc != "" {
+		args = append(args, "--service", svc)
+	}
+	err := run(args...)
+	if err == nil {
+		return nil
+	}
+	if svc != "" && darwinUninstallBenign(err) {
+		return nil
+	}
+	return errdefs.New("service.Uninstall", errdefs.CodeServiceStart, "gitlab-runner uninstall", err)
+}
+
+func darwinUninstallBenign(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such file") || strings.Contains(msg, "not installed")
 }
 
 func (m *darwinManager) ListOwnership(ctx context.Context) ([]Ownership, error) {
@@ -96,6 +164,7 @@ func (m *darwinManager) ListOwnership(ctx context.Context) ([]Ownership, error) 
 		return nil, errdefs.New("service.ListOwnership", errdefs.CodeMissingDeadline, "context missing deadline", nil)
 	}
 	var out []Ownership
+	out = append(out, darwinLaunchdOwnerships(ctx, m.exec)...)
 	if _, err := m.exec.LookPath("brew"); err == nil {
 		info, err := m.exec.Run(ctx, "brew", "services", "list")
 		if err == nil {
@@ -109,12 +178,14 @@ func (m *darwinManager) ListOwnership(ctx context.Context) ([]Ownership, error) 
 					state = fields[1]
 				}
 				login, _ := LoginUser(m.exec)
-				out = append(out, Ownership{
-					ServiceName: "gitlab-runner",
-					State:       state,
-					LogonUser:   login,
-					Kind:        "brew_services",
-				})
+				if !hasServiceName(out, "gitlab-runner") {
+					out = append(out, Ownership{
+						ServiceName: "gitlab-runner",
+						State:       state,
+						LogonUser:   login,
+						Kind:        "brew_services",
+					})
+				}
 			}
 		}
 	}
@@ -133,15 +204,37 @@ func (m *darwinManager) ListOwnership(ctx context.Context) ([]Ownership, error) 
 			})
 		}
 	}
-	return out, nil
+	return dedupeOwnership(out), nil
+}
+
+func hasServiceName(list []Ownership, name string) bool {
+	for _, o := range list {
+		if o.ServiceName == name {
+			return true
+		}
+	}
+	return false
+}
+
+func dedupeOwnership(list []Ownership) []Ownership {
+	seen := map[string]struct{}{}
+	var out []Ownership
+	for _, o := range list {
+		if _, ok := seen[o.ServiceName]; ok {
+			continue
+		}
+		seen[o.ServiceName] = struct{}{}
+		out = append(out, o)
+	}
+	return out
 }
 
 func classifyDarwinStatus(status string) string {
 	lower := strings.ToLower(status)
-	if strings.Contains(lower, "is running") {
+	if strings.Contains(lower, "is running") || strings.Contains(lower, "started") {
 		return "running"
 	}
-	if strings.Contains(lower, "not installed") {
+	if strings.Contains(lower, "not installed") || strings.Contains(lower, "stopped") || strings.Contains(lower, "none") {
 		return "stopped"
 	}
 	return "unknown"
