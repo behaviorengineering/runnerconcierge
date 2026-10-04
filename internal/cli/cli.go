@@ -55,6 +55,10 @@ func Run(ctx context.Context, args []string, w io.Writer) int {
 		return runDoctor(ctx, args[1:], w)
 	case "verify":
 		return runVerify(ctx, args[1:], w)
+	case "status":
+		return runStatus(ctx, args[1:], w)
+	case "repair-service":
+		return runRepairService(ctx, args[1:], w)
 	case "setup":
 		return runSetup(ctx, args[1:], w, preset.Preset{})
 	default:
@@ -70,7 +74,7 @@ func printAgentGuide(w io.Writer) {
 	writef(w, "Operator skill: ai-copilots/skills/runnerconcierge-operator/SKILL.md")
 	writef(w, "")
 	writef(w, "Bare invoke runs the interactive setup wizard.")
-	writef(w, "Commands: init, doctor, verify, setup, version, help")
+	writef(w, "Commands: init, doctor, verify, status, repair-service, setup, version, help")
 	writef(w, "Automation: runnerconcierge setup --non-interactive --yes ...")
 }
 
@@ -81,6 +85,8 @@ func printHelp(w io.Writer) {
 	writef(w, "  init     seed user config.yaml")
 	writef(w, "  doctor   preflight report")
 	writef(w, "  verify   service status")
+	writef(w, "  status   runner inventory and smells")
+	writef(w, "  repair-service  rebind service to login user")
 	writef(w, "  setup    wizard with flags")
 	writef(w, "  version  release identity")
 	writef(w, "  help     this catalog")

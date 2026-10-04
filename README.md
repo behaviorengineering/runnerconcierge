@@ -12,6 +12,20 @@ make build
 ./bin/runnerconcierge init
 ./bin/runnerconcierge        # setup wizard
 ./bin/runnerconcierge doctor
+./bin/runnerconcierge status
+```
+
+Day-2 inventory (manual installs, wrong service user):
+
+```bash
+./bin/runnerconcierge status
+./bin/runnerconcierge repair-service --runner-config ~/.gitlab-runner/config.toml
+```
+
+Live E2E (maintainers; macOS/Windows):
+
+```bash
+make e2e-live
 ```
 
 Automation:

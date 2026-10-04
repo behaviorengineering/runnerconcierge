@@ -1,0 +1,13 @@
+concurrent = 1
+
+[[runners]]
+  name = "home-a"
+  url = "https://gitlab.com/"
+  token = "glrt-SECRETTOKEN123"
+  executor = "shell"
+
+[[runners]]
+  name = "home-b"
+  url = "https://gitlab.com/"
+  token = "glrt-OTHERSECRET"
+  executor = "shell"

@@ -22,6 +22,13 @@ const (
 	CodeServiceStart          Code = "service_start"
 	CodeRunnerOffline         Code = "runner_offline"
 	CodeMissingDeadline       Code = "missing_deadline"
+	CodeBadServiceLogon       Code = "bad_service_logon"
+	CodeWrongServiceUser      Code = "wrong_service_user"
+	CodeSystemConfig          Code = "system_config"
+	CodeConfigUnreadable      Code = "config_unreadable"
+	CodeServiceMissing        Code = "service_missing"
+	CodeServiceStopped        Code = "service_stopped"
+	CodeRunnerBinaryMissing   Code = "runner_binary_missing"
 )
 
 // Error is a typed domain error with stable code.

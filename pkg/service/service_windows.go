@@ -85,6 +85,56 @@ func (m *windowsManager) Status(ctx context.Context) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+func (m *windowsManager) Uninstall(ctx context.Context, opts UninstallOpts) error {
+	if _, ok := ctx.Deadline(); !ok {
+		return errdefs.New("service.Uninstall", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	bin := opts.BinaryPath
+	if bin == "" {
+		bin, _ = m.exec.LookPath("gitlab-runner")
+	}
+	if bin == "" {
+		return errdefs.New("service.Uninstall", errdefs.CodeRunnerBinaryMissing, "gitlab-runner not on PATH", nil)
+	}
+	_, _ = m.exec.Run(ctx, bin, "stop")
+	args := []string{"uninstall"}
+	if strings.TrimSpace(opts.ServiceName) != "" {
+		args = append(args, "--service", strings.TrimSpace(opts.ServiceName))
+	}
+	_, err := m.exec.Run(ctx, bin, args...)
+	if err != nil {
+		return errdefs.New("service.Uninstall", errdefs.CodeServiceStart, "gitlab-runner uninstall", err)
+	}
+	return nil
+}
+
+func (m *windowsManager) ListOwnership(ctx context.Context) ([]Ownership, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		return nil, errdefs.New("service.ListOwnership", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	script := `
+Get-CimInstance Win32_Service | Where-Object {
+  $_.Name -like 'gitlab-runner*' -or ($_.PathName -and $_.PathName -match 'gitlab-runner')
+} | ForEach-Object {
+  [PSCustomObject]@{
+    Name=$_.Name
+    State=$_.State
+    StartName=$_.StartName
+    PathName=$_.PathName
+  }
+} | ConvertTo-Json -Compress
+`
+	out, err := m.exec.Run(ctx, "powershell", "-NoProfile", "-Command", script)
+	if err != nil {
+		return nil, err
+	}
+	raw := strings.TrimSpace(string(out))
+	if raw == "" || raw == "null" {
+		return nil, nil
+	}
+	return parseWindowsOwnershipJSON(raw)
+}
+
 func formatWindowsUser(user string) string {
 	if strings.Contains(user, "\\") {
 		return user
