@@ -171,7 +171,7 @@ func dispatchCobra(ctx context.Context, args []string, stdout, stderr io.Writer)
 		},
 	}
 	cleanupCmd.Flags().DurationVar(&cleanupCfg.MinAge, "min-age", time.Hour, "minimum age before removing exited runner containers")
-	cleanupCmd.Flags().BoolVar(&cleanupCfg.AllowYes, "yes", false, "allow replacing legacy cleanup agents on install")
+	cleanupCmd.PersistentFlags().BoolVar(&cleanupCfg.AllowYes, "yes", false, "allow replacing legacy cleanup agents on install")
 
 	cleanupInstall := &cobra.Command{
 		Use:   "install",

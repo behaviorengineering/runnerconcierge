@@ -62,6 +62,18 @@ func TestRunnersGitHubUnsupported(t *testing.T) {
 	}
 }
 
+func TestCleanupInstallHelpIncludesYes(t *testing.T) {
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run(context.Background(), []string{"cleanup", "install", "--help"}, &out, &errOut)
+	if code != ExitOK {
+		t.Fatalf("exit %d stderr %q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "--yes") {
+		t.Fatalf("install help should list --yes: %q", out.String())
+	}
+}
+
 func TestRunVersion(t *testing.T) {
 	var out bytes.Buffer
 	var errOut bytes.Buffer
