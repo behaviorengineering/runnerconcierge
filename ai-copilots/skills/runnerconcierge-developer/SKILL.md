@@ -20,7 +20,7 @@ Extend runnerconcierge packages and wizard stages.
 | `RUNNERCONCIERGE_WINDOWS_PASSWORD` | Windows service install password for repair |
 | `E2E_LIVE_ARTIFACT_DIR` | Write inventory JSON traces |
 
-Workflow: `.github/workflows/e2e-live.yml` (`make e2e-live` only).
+Workflows: `.github/workflows/e2e-host.yml` (self-hosted `e2e` labels, Environment `e2e-host`, trusted SHA only) and `.github/workflows/e2e-live.yml` (optional GitHub-hosted). Both run `make e2e-live` only.
 
 CLI: bare invoke prints agent guide only; `setup` runs the wizard. Domain errors use `pkg/errdefs` (`Error()` omits cause argv; `FormatCLI` for stderr).
 

@@ -1,0 +1,63 @@
+# Live fixture e2e on dedicated self-hosted runners (trusted SHA only).
+# Do not add pull_request or pull_request_target. Public fork workflows must not run here.
+name: e2e-host
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-host
+  cancel-in-progress: false
+
+jobs:
+  e2e-host:
+    name: e2e-host (${{ matrix.os }})
+    if: >-
+      github.repository == 'behaviorengineering/runnerconcierge' &&
+      (github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'workflow_run' &&
+          github.event.workflow_run.conclusion == 'success'))
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 45
+    environment: e2e-host
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos
+            runs-on: [self-hosted, e2e, macos]
+          - os: windows
+            runs-on: [self-hosted, e2e, windows]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.0"
+          cache: true
+
+      - name: Live fixture e2e
+        shell: bash
+        env:
+          GOWORK: off
+          E2E_LIVE_MODE: fixture
+          E2E_LIVE_REQUIRE: "1"
+          E2E_LIVE_ARTIFACT_DIR: ${{ runner.temp }}/e2e-artifacts
+        run: make e2e-live
+
+      - name: Upload e2e artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-host-${{ matrix.os }}
+          path: ${{ runner.temp }}/e2e-artifacts
+          if-no-files-found: ignore

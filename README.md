@@ -40,7 +40,12 @@ E2E_LIVE_MODE=fixture E2E_LIVE_REQUIRE=1 make e2e-live
 
 On a machine that already has a gitlab-runner service, the fixture uses an **isolated service name** (`runnerconcierge-e2e-*`) so your main runner is not removed. On macOS with an existing runner, the seed and repair steps need **sudo** for the temporary system LaunchDaemon. In Cursor’s terminal, `sudo -v` often does not reach `go test`; set `E2E_LIVE_SUDO_PASSWORD` (or `RUNNERCONCIERGE_SUDO_PASSWORD`) in that shell for the run (local only; do not commit). Optional traces: `E2E_LIVE_ARTIFACT_DIR=/tmp/e2e-artifacts`.
 
-GitHub Actions: run the **e2e-live** workflow manually (`workflow_dispatch`) on `windows-latest` / `macos-latest`. The workflow only runs `make e2e-live`; all install/repair logic is Go in `internal/e2elive/fixture`.
+GitHub Actions:
+
+- **e2e-host** (recommended for homelab): `workflow_dispatch` or after **CI** succeeds on `main`. Runs on self-hosted runners labeled `e2e` + `macos` or `e2e` + `windows`, GitHub Environment `e2e-host` (required reviewers). Trusted repo SHA only; no `pull_request` trigger. See operator skill for runner registration.
+- **e2e-live**: optional manual run on GitHub-hosted `windows-latest` / `macos-latest` (same `make e2e-live`).
+
+All install/repair logic is Go in `internal/e2elive/fixture`.
 
 Observe-only inventory (no fixture):
 
