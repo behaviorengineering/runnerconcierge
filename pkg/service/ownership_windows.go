@@ -29,12 +29,19 @@ func parseWindowsOwnershipJSON(raw string) ([]Ownership, error) {
 	}
 	out := make([]Ownership, 0, len(list))
 	for _, s := range list {
+		cmd := SanitizeCommand(s.PathName)
+		state := s.State
+		processUp := strings.EqualFold(state, "running")
 		out = append(out, Ownership{
 			ServiceName: s.Name,
-			State:       s.State,
+			State:       state,
 			LogonUser:   s.StartName,
 			ConfigPath:  parseConfigFromPathName(s.PathName),
 			Kind:        "windows_service",
+			Command:     cmd,
+			MatchReason: MatchReasonWindowsServiceName,
+			Role:        ClassifyRole(s.Name, "windows_service", cmd),
+			ProcessUp:   processUp,
 		})
 	}
 	return out, nil

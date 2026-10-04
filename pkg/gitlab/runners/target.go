@@ -9,19 +9,34 @@ import (
 	"github.com/behaviorengineering/runnerconcierge/pkg/service"
 )
 
+// TargetKind classifies a picker row.
+type TargetKind string
+
+const (
+	TargetKindRegistration TargetKind = "registration"
+	TargetKindServiceOnly  TargetKind = "service_only"
+)
+
 // Target is one selectable runner on this machine.
 type Target struct {
-	Key          string `json:"key"`
-	Name         string `json:"name"`
-	URL          string `json:"url"`
-	Executor     string `json:"executor"`
-	GitLabID     int    `json:"gitlab_id"`
-	ConfigPath   string `json:"config_path"`
-	ServiceName  string `json:"service_name"`
-	ServiceKind  string `json:"service_kind"`
-	ServiceState string `json:"service_state"`
-	UseBrew      bool   `json:"use_brew"`
-	EntryCount   int    `json:"entry_count"`
+	Key          string     `json:"key"`
+	Kind         TargetKind `json:"target_kind"`
+	Name         string     `json:"name"`
+	URL          string     `json:"url"`
+	Executor     string     `json:"executor"`
+	GitLabID     int        `json:"gitlab_id"`
+	ConfigPath   string     `json:"config_path"`
+	ServiceName  string     `json:"service_name"`
+	ServiceKind  string     `json:"service_kind"`
+	ServiceState string     `json:"service_state"`
+	UseBrew      bool       `json:"use_brew"`
+	EntryCount   int        `json:"entry_count"`
+	UnitPath     string     `json:"unit_path"`
+	Command      string     `json:"command"`
+	MatchReason  string     `json:"match_reason"`
+	Role         string     `json:"role"`
+	ProcessUp    bool       `json:"process_up"`
+	LogonUser    string     `json:"logon_user"`
 }
 
 // JoinTargets builds picker rows from an inventory report.
@@ -47,6 +62,7 @@ func JoinTargets(rep *inventory.Report) []Target {
 			svc := attachService(services, cfg.Path, configCount, attached)
 			t := Target{
 				Key:        targetKey(cfg.Path, r.Name),
+				Kind:       TargetKindRegistration,
 				Name:       strings.TrimSpace(r.Name),
 				URL:        strings.TrimSpace(r.URL),
 				Executor:   strings.TrimSpace(r.Executor),
@@ -55,29 +71,32 @@ func JoinTargets(rep *inventory.Report) []Target {
 				EntryCount: count,
 			}
 			if svc != nil {
-				t.ServiceName = svc.ServiceName
-				t.ServiceKind = svc.Kind
-				t.ServiceState = svc.State
-				t.UseBrew = svc.Kind == "brew_services" || svc.ServiceName == "sh.brew.gitlab-runner"
+				applyServiceFields(&t, svc)
 				attached[svc.ServiceName] = true
 			}
 			out = append(out, t)
 		}
 	}
-	for _, svc := range services {
-		if attached[svc.ServiceName] {
+	for i := range services {
+		if attached[services[i].ServiceName] {
 			continue
 		}
-		out = append(out, Target{
-			Key:          "svc:" + svc.ServiceName,
-			ConfigPath:   svc.ConfigPath,
-			ServiceName:  svc.ServiceName,
-			ServiceKind:  svc.Kind,
-			ServiceState: svc.State,
-			UseBrew:      svc.Kind == "brew_services",
-		})
+		t := Target{
+			Key:         "svc:" + services[i].ServiceName,
+			Kind:        TargetKindServiceOnly,
+			ConfigPath:  services[i].ConfigPath,
+			ServiceName: services[i].ServiceName,
+		}
+		applyServiceFields(&t, &services[i])
+		out = append(out, t)
 	}
 	sort.Slice(out, func(i, j int) bool {
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind == TargetKindRegistration
+		}
+		if roleRank(out[i].Role) != roleRank(out[j].Role) {
+			return roleRank(out[i].Role) < roleRank(out[j].Role)
+		}
 		if out[i].Name != out[j].Name {
 			return out[i].Name < out[j].Name
 		}
@@ -87,6 +106,38 @@ func JoinTargets(rep *inventory.Report) []Target {
 		return out[i].ServiceName < out[j].ServiceName
 	})
 	return out
+}
+
+func roleRank(role string) int {
+	switch role {
+	case service.RoleSupervisor:
+		return 0
+	case service.RoleHelper:
+		return 1
+	case service.RoleFixture:
+		return 2
+	default:
+		return 3
+	}
+}
+
+func applyServiceFields(t *Target, svc *service.Ownership) {
+	if t == nil || svc == nil {
+		return
+	}
+	t.ServiceName = svc.ServiceName
+	t.ServiceKind = svc.Kind
+	t.ServiceState = svc.State
+	t.UseBrew = svc.Kind == "brew_services" || svc.ServiceName == "sh.brew.gitlab-runner"
+	t.UnitPath = svc.UnitPath
+	t.Command = svc.Command
+	t.MatchReason = svc.MatchReason
+	t.Role = svc.Role
+	t.ProcessUp = svc.ProcessUp
+	t.LogonUser = svc.LogonUser
+	if strings.TrimSpace(t.ConfigPath) == "" {
+		t.ConfigPath = svc.ConfigPath
+	}
 }
 
 func targetKey(configPath, name string) string {
@@ -165,4 +216,12 @@ func PickTarget(targets []Target, name, serviceName, configPath string) (*Target
 	default:
 		return nil, fmt.Errorf("runners: selection is ambiguous; pass --service or --config")
 	}
+}
+
+// IsHelperServiceTarget reports whether actions should refer to a service unit, not a registered runner.
+func IsHelperServiceTarget(t *Target) bool {
+	if t == nil {
+		return false
+	}
+	return t.Kind == TargetKindServiceOnly || t.Role == service.RoleHelper
 }

@@ -213,10 +213,7 @@ func (c *Controller) actionRemove(ctx context.Context, t *Target) error {
 			}
 			pr = prompt.ForTTY()
 		}
-		msg := fmt.Sprintf("Remove runner %q from this machine?", labelOrDash(t.Name))
-		if t.EntryCount > 1 {
-			msg = fmt.Sprintf("Remove runner %q? Other [[runners]] in %q stay registered.", labelOrDash(t.Name), t.ConfigPath)
-		}
+		msg := removeConfirmMessage(t)
 		ok, err := pr.Confirm(ctx, msg)
 		if err != nil {
 			return err
@@ -389,6 +386,16 @@ func unregisterBenign(err error) bool {
 	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "not found") || strings.Contains(msg, "not registered")
+}
+
+func removeConfirmMessage(t *Target) string {
+	if IsHelperServiceTarget(t) || (t != nil && t.Kind == TargetKindServiceOnly && strings.TrimSpace(t.Name) == "") {
+		return fmt.Sprintf("Remove service unit %q from this machine?", labelOrDash(t.ServiceName))
+	}
+	if t.EntryCount > 1 {
+		return fmt.Sprintf("Remove runner %q? Other [[runners]] in %q stay registered.", labelOrDash(t.Name), t.ConfigPath)
+	}
+	return fmt.Sprintf("Remove runner %q from this machine?", labelOrDash(t.Name))
 }
 
 func labelOrDash(s string) string {

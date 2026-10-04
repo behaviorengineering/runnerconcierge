@@ -28,7 +28,7 @@ func darwinLaunchdOwnerships(ctx context.Context, exec gitexec.Exec) []Ownership
 				continue
 			}
 			name := strings.TrimSuffix(e.Name(), ".plist")
-			if !isRunnerPlistName(name) {
+			if !IsRunnerServiceName(name) {
 				continue
 			}
 			path := filepath.Join(dir, e.Name())
@@ -36,39 +36,42 @@ func darwinLaunchdOwnerships(ctx context.Context, exec gitexec.Exec) []Ownership
 			if err != nil {
 				continue
 			}
-			cfg := configPathFromPlist(data)
+			parsed := parseLaunchdPlist(data)
+			cfg := parsed.ConfigPath
+			if cfg == "" {
+				cfg = configPathFromPlistLegacy(data)
+			}
+			cmd := SanitizeCommand(joinArgv(parsed.Argv))
 			logon := login
 			if strings.HasPrefix(dir, "/Library/LaunchDaemons") {
 				logon = "root"
 			}
+			state, processUp := launchdStateAndProcess(ctx, exec, name)
+			role := ClassifyRole(name, "launchd", cmd)
 			out = append(out, Ownership{
 				ServiceName: name,
-				State:       launchdState(ctx, exec, name),
+				State:       state,
 				LogonUser:   logon,
 				ConfigPath:  cfg,
 				Kind:        "launchd",
+				UnitPath:    path,
+				Command:     cmd,
+				MatchReason: MatchReasonForLaunchd(name),
+				Role:        role,
+				ProcessUp:   processUp,
 			})
 		}
 	}
 	return out
 }
 
-func isRunnerPlistName(name string) bool {
-	lower := strings.ToLower(name)
-	if strings.Contains(lower, "runnerconcierge-e2e-") {
-		return true
-	}
-	return strings.Contains(lower, "gitlab-runner")
-}
-
-func configPathFromPlist(data []byte) string {
+func configPathFromPlistLegacy(data []byte) string {
 	s := string(data)
 	idx := strings.Index(s, "--config")
 	if idx < 0 {
 		return ""
 	}
 	rest := s[idx+len("--config"):]
-	// plist often has </string> between key and value; grab next path-like token
 	for _, part := range strings.FieldsFunc(rest, func(r rune) bool {
 		return r == '<' || r == '>' || r == '\n' || r == '\t'
 	}) {
@@ -80,21 +83,27 @@ func configPathFromPlist(data []byte) string {
 	return ""
 }
 
-func launchdState(ctx context.Context, exec gitexec.Exec, label string) string {
+func launchdStateAndProcess(ctx context.Context, exec gitexec.Exec, label string) (state string, processUp bool) {
 	out, err := exec.Run(ctx, "launchctl", "list")
 	if err != nil {
-		return "unknown"
+		return "unknown", false
 	}
 	for _, line := range strings.Split(string(out), "\n") {
-		if strings.Contains(line, label) {
-			fields := strings.Fields(line)
-			if len(fields) >= 2 && fields[1] != "-" {
-				return "running"
-			}
-			return "stopped"
+		if !strings.Contains(line, label) {
+			continue
 		}
+		fields := strings.Fields(line)
+		if len(fields) >= 2 {
+			pid := fields[0]
+			processUp = pid != "-" && pid != "0"
+			if fields[1] != "-" {
+				return "running", processUp
+			}
+			return "stopped", processUp
+		}
+		return "stopped", false
 	}
-	return "unknown"
+	return "unknown", false
 }
 
 func userHome() string {

@@ -36,6 +36,11 @@ type Ownership struct {
 	LogonUser   string
 	ConfigPath  string
 	Kind        string
+	UnitPath    string
+	Command     string
+	MatchReason string
+	Role        string
+	ProcessUp   bool
 }
 
 // UninstallOpts configures service removal.

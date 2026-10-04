@@ -54,12 +54,49 @@ func TestJoinTargets_twoRunnersOneService(t *testing.T) {
 func TestJoinTargets_orphanService(t *testing.T) {
 	rep := &inventory.Report{
 		Services: []service.Ownership{
-			{ServiceName: "orphan", Kind: "launchd", State: "stopped", ConfigPath: "/x.toml"},
+			{
+				ServiceName: "orphan",
+				Kind:        "launchd",
+				State:       "stopped",
+				ConfigPath:  "/x.toml",
+				Role:        service.RoleHelper,
+				MatchReason: service.MatchReasonLaunchdLabel,
+			},
 		},
 	}
 	targets := JoinTargets(rep)
 	if len(targets) != 1 || targets[0].Key != "svc:orphan" {
 		t.Fatalf("got %+v", targets)
+	}
+	if targets[0].Kind != TargetKindServiceOnly || targets[0].Role != service.RoleHelper {
+		t.Fatalf("kind/role %+v", targets[0])
+	}
+}
+
+func TestJoinTargets_registrationsAndServices(t *testing.T) {
+	rep := &inventory.Report{
+		Configs: []inventory.ConfigReport{{
+			Path:     "/cfg.toml",
+			Readable: true,
+			Runners: []inventory.RunnerEntry{
+				{Name: "a"},
+				{Name: "b"},
+			},
+		}},
+		Services: []service.Ownership{
+			{ServiceName: "gitlab-runner", Kind: "brew_services", State: "started", Role: service.RoleSupervisor, MatchReason: service.MatchReasonBrewFormula, ProcessUp: true},
+			{ServiceName: "com.hector.gitlab-runner-docker-cleanup", Kind: "launchd", State: "running", Role: service.RoleHelper, MatchReason: service.MatchReasonLaunchdLabel, ProcessUp: true},
+		},
+	}
+	targets := JoinTargets(rep)
+	if len(targets) != 4 {
+		t.Fatalf("expected 4 targets, got %d", len(targets))
+	}
+	if targets[0].Kind != TargetKindRegistration {
+		t.Fatalf("first should be registration")
+	}
+	if targets[2].Role != service.RoleSupervisor {
+		t.Fatalf("supervisor at index 2: %+v", targets[2])
 	}
 }
 

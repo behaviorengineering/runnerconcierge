@@ -212,11 +212,21 @@ func (m *darwinManager) ListOwnership(ctx context.Context) ([]Ownership, error) 
 				}
 				login, _ := LoginUser(m.exec)
 				if !hasServiceName(out, "gitlab-runner") {
+					cmd := "gitlab-runner run"
+					if bin, err := m.exec.LookPath("gitlab-runner"); err == nil {
+						cmd = bin + " run"
+					}
+					processUp := strings.EqualFold(state, "started")
 					out = append(out, Ownership{
 						ServiceName: "gitlab-runner",
 						State:       state,
 						LogonUser:   login,
 						Kind:        "brew_services",
+						UnitPath:    "brew",
+						Command:     SanitizeCommand(cmd),
+						MatchReason: MatchReasonBrewFormula,
+						Role:        RoleSupervisor,
+						ProcessUp:   processUp,
 					})
 				}
 			}
@@ -228,12 +238,16 @@ func (m *darwinManager) ListOwnership(ctx context.Context) ([]Ownership, error) 
 		login, _ := LoginUser(m.exec)
 		procUser := darwinProcessUser(ctx, m.exec)
 		if len(out) == 0 {
+			stLower := classifyDarwinStatus(st)
 			out = append(out, Ownership{
 				ServiceName: "gitlab-runner",
-				State:       classifyDarwinStatus(st),
+				State:       stLower,
 				LogonUser:   firstNonEmpty(procUser, login),
 				ConfigPath:  cfg,
 				Kind:        "launchd",
+				MatchReason: MatchReasonLaunchdLabel,
+				Role:        RoleSupervisor,
+				ProcessUp:   stLower == "running",
 			})
 		}
 	}
