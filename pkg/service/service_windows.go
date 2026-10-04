@@ -85,11 +85,17 @@ func (m *windowsManager) Start(ctx context.Context, opts StartOpts) error {
 }
 
 func (m *windowsManager) Status(ctx context.Context) (string, error) {
-	out, err := m.exec.Run(ctx, "gitlab-runner", "status")
-	if err != nil {
-		return "", err
+	if _, ok := ctx.Deadline(); !ok {
+		return "", errdefs.New("service.Status", errdefs.CodeMissingDeadline, "context missing deadline", nil)
 	}
-	return strings.TrimSpace(string(out)), nil
+	out, err := m.exec.Run(ctx, "gitlab-runner", "status")
+	if err == nil {
+		return nativeStatusLine(out), nil
+	}
+	if gitlabServiceNotInstalled(err) {
+		return "", errdefs.New("service.Status", errdefs.CodeServiceMissing, "gitlab-runner service is not installed", nil)
+	}
+	return "", errdefs.New("service.Status", errdefs.CodeServiceStart, "gitlab-runner status failed", err)
 }
 
 func (m *windowsManager) Uninstall(ctx context.Context, opts UninstallOpts) error {

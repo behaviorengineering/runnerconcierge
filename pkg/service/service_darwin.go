@@ -65,11 +65,26 @@ func (m *darwinManager) Start(ctx context.Context, opts StartOpts) error {
 }
 
 func (m *darwinManager) Status(ctx context.Context) (string, error) {
-	out, err := m.exec.Run(ctx, "gitlab-runner", "status")
-	if err != nil {
-		return "", err
+	if _, ok := ctx.Deadline(); !ok {
+		return "", errdefs.New("service.Status", errdefs.CodeMissingDeadline, "context missing deadline", nil)
 	}
-	return strings.TrimSpace(string(out)), nil
+	out, err := m.exec.Run(ctx, "gitlab-runner", "status")
+	if err == nil {
+		return nativeStatusLine(out), nil
+	}
+	if !gitlabServiceNotInstalled(err) {
+		return "", errdefs.New("service.Status", errdefs.CodeServiceStart, "gitlab-runner status failed", err)
+	}
+	if _, lookErr := m.exec.LookPath("brew"); lookErr == nil {
+		list, brewErr := m.exec.Run(ctx, "brew", "services", "list")
+		if brewErr != nil {
+			return "", errdefs.New("service.Status", errdefs.CodeServiceStart, "brew services list failed", brewErr)
+		}
+		if line := brewGitLabRunnerStatusLine(string(list)); line != "" {
+			return line, nil
+		}
+	}
+	return "", errdefs.New("service.Status", errdefs.CodeServiceMissing, "gitlab-runner service is not installed via GitLab or brew", nil)
 }
 
 func (m *darwinManager) Uninstall(ctx context.Context, opts UninstallOpts) error {
@@ -213,10 +228,10 @@ func dedupeOwnership(list []Ownership) []Ownership {
 
 func classifyDarwinStatus(status string) string {
 	lower := strings.ToLower(status)
-	if strings.Contains(lower, "is running") {
+	if strings.Contains(lower, "is running") || strings.Contains(lower, "started") {
 		return "running"
 	}
-	if strings.Contains(lower, "not installed") {
+	if strings.Contains(lower, "not installed") || strings.Contains(lower, "stopped") || strings.Contains(lower, "none") {
 		return "stopped"
 	}
 	return "unknown"

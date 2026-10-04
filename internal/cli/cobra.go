@@ -55,11 +55,18 @@ func dispatchCobra(ctx context.Context, args []string, stdout, stderr io.Writer)
 	initCmd.Flags().BoolVar(&initForce, "force", false, "overwrite config.yaml")
 
 	var doctorDocker bool
+	var doctorJSON bool
 	doctorCmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Preflight report",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			code := runDoctor(ctx, []string{"-docker=" + fmt.Sprintf("%t", doctorDocker)}, stdout, stderr)
+			code, err := runDoctor(ctx, []string{
+				"-docker=" + fmt.Sprintf("%t", doctorDocker),
+				"-json=" + fmt.Sprintf("%t", doctorJSON),
+			}, stdout, stderr)
+			if err != nil {
+				return err
+			}
 			if code == ExitDoctor {
 				return &exitError{code: ExitDoctor, err: fmt.Errorf("doctor found blocking issues")}
 			}
@@ -70,15 +77,13 @@ func dispatchCobra(ctx context.Context, args []string, stdout, stderr io.Writer)
 		},
 	}
 	doctorCmd.Flags().BoolVar(&doctorDocker, "docker", false, "require docker")
+	doctorCmd.Flags().BoolVar(&doctorJSON, "json", false, "JSON output")
 
 	verifyCmd := &cobra.Command{
 		Use:   "verify",
 		Short: "Service status",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			if runVerify(ctx, nil, stdout, stderr) != ExitOK {
-				return fmt.Errorf("verify failed")
-			}
-			return nil
+			return runVerify(ctx, stdout)
 		},
 	}
 

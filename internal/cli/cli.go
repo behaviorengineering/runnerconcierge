@@ -11,6 +11,7 @@ import (
 
 	"github.com/behaviorengineering/gitvalet/pkg/gitexec"
 	"github.com/behaviorengineering/runnerconcierge/pkg/detect"
+	"github.com/behaviorengineering/runnerconcierge/pkg/errdefs"
 	"github.com/behaviorengineering/runnerconcierge/pkg/preset"
 	"github.com/behaviorengineering/runnerconcierge/pkg/service"
 	"github.com/behaviorengineering/runnerconcierge/pkg/wizard"
@@ -96,46 +97,42 @@ func printHelp(w io.Writer) {
 	writef(w, "Bare invoke prints the agent operating guide (no setup).")
 }
 
-func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) (int, error) {
 	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	docker := fs.Bool("docker", false, "require docker")
+	jsonOut := fs.Bool("json", false, "JSON output")
 	_ = fs.Parse(args)
 	ctx, cancel := withDeadline(ctx, 30*time.Second)
 	defer cancel()
 	doc := detect.NewDoctor(gitexec.New())
 	rep, err := doc.Run(ctx, *docker)
 	if err != nil {
-		writef(stderr, "doctor: %v\n", err)
-		return ExitFail
+		return ExitFail, errdefs.New("doctor", errdefs.CodeOf(err), "preflight checks failed", err)
 	}
-	writef(stdout, "os=%s arch=%s user=%s elevated=%v git=%v runner=%s glab=%s\n",
-		rep.GOOS, rep.GOARCH, rep.Username, rep.Elevated, rep.GitOK, rep.RunnerVer, rep.GlabVer)
-	blocked := false
-	for _, iss := range rep.Issues {
-		writef(stdout, "- [%s] %s\n", iss.Code, iss.Message)
-		if iss.Block {
-			blocked = true
+	if *jsonOut {
+		if err := detect.RenderJSON(stdout, rep); err != nil {
+			return ExitFail, errdefs.New("doctor", errdefs.CodeCreateFailed, "could not render JSON report", err)
 		}
+	} else if err := detect.Render(stdout, rep); err != nil {
+		return ExitFail, errdefs.New("doctor", errdefs.CodeCreateFailed, "could not render report", err)
 	}
-	if blocked {
-		return ExitDoctor
+	if detect.HasBlocking(rep) {
+		return ExitDoctor, nil
 	}
-	return ExitOK
+	return ExitOK, nil
 }
 
-func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	_ = flag.NewFlagSet("verify", flag.ContinueOnError)
+func runVerify(ctx context.Context, stdout io.Writer) error {
 	ctx, cancel := withDeadline(ctx, 30*time.Second)
 	defer cancel()
 	svc := service.New(gitexec.New())
 	st, err := svc.Status(ctx)
 	if err != nil {
-		writef(stderr, "verify: %v\n", err)
-		return ExitFail
+		return err
 	}
-	writef(stdout, "%s\n", st)
-	return ExitOK
+	writef(stdout, "%s", st)
+	return nil
 }
 
 func runWizard(ctx context.Context, stdout, stderr io.Writer, pre preset.Preset, opt *wizard.Options) error {

@@ -37,7 +37,7 @@ smoke: build ## Smoke-test CLI surfaces
 	./bin/runnerconcierge | grep -q 'Documentation for agents'
 	./bin/runnerconcierge help
 	./bin/runnerconcierge version
-	./bin/runnerconcierge doctor
+	./bin/runnerconcierge doctor | grep -q '^Tools'
 	./bin/runnerconcierge unknown || test $$? = 2
 
 ci: tidy fmt vet test build smoke ## CI aggregate

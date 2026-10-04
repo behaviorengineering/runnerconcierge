@@ -25,7 +25,7 @@ func (s *stubManager) Start(ctx context.Context, opts StartOpts) error {
 }
 
 func (s *stubManager) Status(ctx context.Context) (string, error) {
-	return "", fmt.Errorf("service: unsupported platform")
+	return "", errdefs.New("service.Status", errdefs.CodeUnsupportedOS, "service status supported on darwin and windows only", nil)
 }
 
 func (s *stubManager) Uninstall(ctx context.Context, opts UninstallOpts) error {

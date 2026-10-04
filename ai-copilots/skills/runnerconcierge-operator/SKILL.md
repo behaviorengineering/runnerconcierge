@@ -16,8 +16,8 @@ Operate the runnerconcierge GitLab runner setup CLI.
 - `runnerconcierge`: agent operating guide (no setup)
 - `runnerconcierge setup`: wizard (`--repo group/project` required to create a project runner)
 - `runnerconcierge init`: seed config
-- `runnerconcierge doctor`: setup preflight
-- `runnerconcierge verify`: one-line service status (scripts)
+- `runnerconcierge doctor`: setup preflight (labeled sections; `--json` for agents; `--docker` to require Docker)
+- `runnerconcierge verify`: one-line service status (GitLab native install or brew services on macOS)
 - `runnerconcierge status`: full machine inventory and smells (`--json` for agents)
 - `runnerconcierge repair-service --runner-config PATH`: rebind service to login user (confirm or `--yes`; Windows password via prompt, `--windows-password`, or `RUNNERCONCIERGE_WINDOWS_PASSWORD`)
 
