@@ -41,6 +41,9 @@ func (m *darwinManager) Install(ctx context.Context, opts InstallOpts) error {
 	if opts.ConfigPath != "" {
 		args = append(args, "--config", opts.ConfigPath)
 	}
+	if strings.TrimSpace(opts.User) != "" {
+		args = append(args, "--user", strings.TrimSpace(opts.User))
+	}
 	_, err := m.exec.Run(ctx, "gitlab-runner", args...)
 	if err != nil {
 		return errdefs.New("service.Install", errdefs.CodeServiceStart, "gitlab-runner install", err)

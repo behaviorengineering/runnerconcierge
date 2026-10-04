@@ -253,3 +253,60 @@ func (c *Client) Register(ctx context.Context, runnerBin string, args []string) 
 	}
 	return nil
 }
+
+// DeleteRunner removes a GitLab runner by id (HTTP PAT when set, else glab).
+func (c *Client) DeleteRunner(ctx context.Context, runnerID int, pat string) error {
+	if c == nil {
+		return errdefs.New(deleteRunnerOp, errdefs.CodeCreateFailed, "client is nil", nil)
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		return errdefs.New(deleteRunnerOp, errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	if runnerID <= 0 {
+		return errdefs.New(deleteRunnerOp, errdefs.CodeInvalidScope, "runner id is required", nil)
+	}
+	if strings.TrimSpace(pat) != "" {
+		return c.deleteHTTP(ctx, runnerID, pat)
+	}
+	return c.deleteGlab(ctx, runnerID)
+}
+
+func (c *Client) deleteGlab(ctx context.Context, runnerID int) error {
+	_, err := c.Exec.Run(ctx, "glab", "api", "--method", "DELETE", fmt.Sprintf("runners/%d", runnerID))
+	if err != nil {
+		return newDeleteErr(glabFailureMessage(err), err)
+	}
+	return nil
+}
+
+func (c *Client) deleteHTTP(ctx context.Context, runnerID int, pat string) error {
+	if c.HTTP == nil {
+		c.HTTP = http.DefaultClient
+	}
+	endpoint := fmt.Sprintf("%s/api/v4/runners/%d", c.BaseURL, runnerID)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return newDeleteErr("build request", err)
+	}
+	httpReq.Header.Set("PRIVATE-TOKEN", pat)
+	res, err := c.HTTP.Do(httpReq)
+	if err != nil {
+		return newDeleteErr("HTTP request failed", err)
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(res.Body)
+	if res.StatusCode == http.StatusForbidden {
+		return errdefs.New(deleteRunnerOp, errdefs.CodeAuthScopeInsufficient, "forbidden; cannot delete runner", nil)
+	}
+	if res.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if res.StatusCode != http.StatusNoContent && res.StatusCode != http.StatusOK && res.StatusCode != http.StatusAccepted {
+		msg := gitlabMessageFromBody(body)
+		if msg == "" {
+			msg = fmt.Sprintf("GitLab returned HTTP %d", res.StatusCode)
+		}
+		return newDeleteErr(msg, nil)
+	}
+	return nil
+}

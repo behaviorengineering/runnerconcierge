@@ -78,6 +78,12 @@ func ValidateCreateRunnerRequest(req CreateRunnerRequest) error {
 	return nil
 }
 
+const deleteRunnerOp = "gitlabrunner.DeleteRunner"
+
+func newDeleteErr(msg string, err error) *errdefs.Error {
+	return errdefs.New(deleteRunnerOp, errdefs.CodeCreateFailed, msg, err)
+}
+
 func errdefsMissingProject() error {
 	return newInvalidScopeErr("project_id is required for project_type")
 }

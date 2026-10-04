@@ -23,20 +23,19 @@ Day-2 inventory (manual installs, wrong service user):
 ./bin/runnerconcierge repair-service --runner-config ~/.gitlab-runner/config.toml
 ```
 
-Live E2E (maintainers; macOS/Windows only; not part of Ubuntu PR CI):
-
-Local-first (fixture install → status smell → repair → dispose; **no GitLab register**):
+Live E2E (maintainers; macOS/Windows only; not Ubuntu PR CI):
 
 ```bash
-make build
-E2E_LIVE_MODE=fixture make e2e-live
+make e2e-live
 ```
 
-Fail if the test would skip (CI-style):
+Runs the isolated fixture (smell → repair → dispose). Add GitLab create/register/unregister in the same command after a one-time `export E2E_LIVE_REPO=group/project` and `glab auth login` (or `GITLAB_TOKEN`). Dispose removes the GitLab runner.
 
 ```bash
-E2E_LIVE_MODE=fixture E2E_LIVE_REQUIRE=1 make e2e-live
+E2E_LIVE_REQUIRE=1 make e2e-live
 ```
+
+fails if the fixture would skip (missing `gitlab-runner`). Register stays optional unless `E2E_LIVE_REPO` is set.
 
 On a machine that already has a gitlab-runner service, the fixture uses an **isolated service name** (`runnerconcierge-e2e-*`) so your main runner is not removed. On macOS with an existing runner, the seed and repair steps need **sudo** for the temporary system LaunchDaemon. In Cursor’s terminal, `sudo -v` often does not reach `go test`; set `E2E_LIVE_SUDO_PASSWORD` (or `RUNNERCONCIERGE_SUDO_PASSWORD`) in that shell for the run (local only; do not commit). Optional traces: `E2E_LIVE_ARTIFACT_DIR=/tmp/e2e-artifacts`.
 

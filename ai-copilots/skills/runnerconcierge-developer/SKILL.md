@@ -13,7 +13,10 @@ Extend runnerconcierge packages and wizard stages.
 
 | Variable | Purpose |
 |----------|---------|
-| `E2E_LIVE_MODE=fixture` | Run `TestFixtureLifecycle` |
+| `E2E_LIVE_MODE=fixture` | Default via `make e2e-live`; run `TestFixtureLifecycle` |
+| `E2E_LIVE_REPO` | `group/project`; enables `TestRegisterLifecycle` (create/register/delete) |
+| `E2E_LIVE_REGISTER=1` | Require register path (`E2E_LIVE_REPO` must be set) |
+| `E2E_LIVE_GITLAB_URL` | Override GitLab base URL |
 | `E2E_LIVE_REQUIRE=1` | Skip → fatal on darwin/windows |
 | `E2E_LIVE_ALLOW_EXISTING=1` | Allow seed when gitlab-runner services already exist |
 | `E2E_LIVE_SET_WINDOWS_PASSWORD=1` | Allow `net user` password reset for repair (also on `GITHUB_ACTIONS`) |

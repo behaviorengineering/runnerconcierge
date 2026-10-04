@@ -70,6 +70,34 @@ func TestFixtureLifecycle(t *testing.T) {
 	}
 }
 
+func TestRegisterLifecycle(t *testing.T) {
+	if !fixture.WantRegister() {
+		t.Skip(fixture.SkipRegisterReason())
+	}
+	if reason := fixture.SkipRegisterReason(); reason != "" {
+		skipOrFatal(t, reason)
+	}
+	if _, err := gitexec.New().LookPath("gitlab-runner"); err != nil {
+		skipOrFatal(t, "gitlab-runner not on PATH")
+	}
+	exec := gitexec.New()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	st, err := fixture.RunRegister(ctx, fixture.Options{Exec: exec})
+	if st != nil {
+		t.Cleanup(func() {
+			disposeCtx, disposeCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer disposeCancel()
+			if derr := fixture.DisposeRegister(disposeCtx, exec, st); derr != nil {
+				t.Errorf("register dispose: %v", derr)
+			}
+		})
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func buildCLI(t *testing.T) string {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "runnerconcierge")

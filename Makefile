@@ -42,5 +42,7 @@ smoke: build ## Smoke-test CLI surfaces
 
 ci: tidy fmt vet test build smoke ## CI aggregate
 
-e2e-live: ## Live status/repair E2E (darwin/windows only; not CI)
-	GOWORK=$(GOWORK) go test -tags=e2e_live -count=1 -timeout 30m ./internal/e2elive/...
+E2E_LIVE_MODE ?= fixture
+
+e2e-live: ## Live fixture + optional GitLab register E2E (darwin/windows; not Ubuntu CI)
+	GOWORK=$(GOWORK) E2E_LIVE_MODE=$(E2E_LIVE_MODE) go test -tags=e2e_live -count=1 -timeout 30m ./internal/e2elive/...

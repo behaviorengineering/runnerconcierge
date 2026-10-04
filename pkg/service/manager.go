@@ -14,6 +14,7 @@ type InstallOpts struct {
 	ServiceName      string
 	WindowsUser      string
 	WindowsPassword  string // memory only; never persisted
+	User             string // darwin gitlab-runner install --user (login user)
 	UseBrewServices  bool
 }
 
