@@ -53,20 +53,32 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 }
 
 func printAgentGuide(w io.Writer) {
-	writef(w, "runnerconcierge %s: GitLab self-hosted runner setup CLI\n", version)
+	writef(w, "runnerconcierge %s", version)
+	writef(w, "GitLab self-hosted runner setup for macOS and Windows.")
 	writef(w, "")
-	writef(w, "Purpose: install, register, and run gitlab-runner under the login user on macOS and Windows.")
+	writef(w, "Installs, registers, and runs gitlab-runner under your login user.")
+	writef(w, "Bare invoke does not run setup; pick a command below or run help.")
 	writef(w, "")
-	writef(w, "Agent docs: AGENTS.md, ai-copilots/README.md, ai-copilots/BOOTSTRAP.md")
-	writef(w, "Operator skill: ai-copilots/skills/runnerconcierge-operator/SKILL.md")
+	writef(w, "Documentation for agents")
+	writef(w, "  AGENTS.md")
+	writef(w, "  ai-copilots/README.md")
+	writef(w, "  ai-copilots/BOOTSTRAP.md")
+	writef(w, "  ai-copilots/skills/runnerconcierge-operator/SKILL.md")
 	writef(w, "")
-	writef(w, "Inspect (read-only):")
+	writef(w, "Read-only")
 	writef(w, "  doctor, verify, status, version, help")
-	writef(w, "Execute (mutates host or GitLab):")
+	writef(w, "")
+	writef(w, "Changes this machine or GitLab")
 	writef(w, "  init, setup, repair-service")
 	writef(w, "")
-	writef(w, "Automation: runnerconcierge setup --non-interactive --yes --repo group/project ...")
-	writef(w, "Flags: --yes allows package installs; pass --repo for project runners.")
+	writef(w, "Automation example")
+	writef(w, "  runnerconcierge setup --non-interactive --yes --repo group/project ...")
+	writef(w, "")
+	writef(w, "Common flags")
+	writef(w, "  --repo  GitLab project path (required for project runners)")
+	writef(w, "  --yes   Allow package installs without prompting")
+	writef(w, "")
+	writef(w, "Full command list: runnerconcierge help")
 }
 
 func printHelp(w io.Writer) {
@@ -163,7 +175,15 @@ func splitTags(s string) []string {
 }
 
 func writef(w io.Writer, format string, args ...any) {
-	fmt.Fprintf(w, format, args...)
+	if format == "" {
+		fmt.Fprintln(w)
+		return
+	}
+	out := fmt.Sprintf(format, args...)
+	if !strings.HasSuffix(out, "\n") {
+		out += "\n"
+	}
+	fmt.Fprint(w, out)
 }
 
 // PresetFromEnv loads optional preset path (host binaries may inject via build).
