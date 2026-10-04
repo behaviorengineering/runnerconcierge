@@ -10,7 +10,8 @@ Module: `github.com/behaviorengineering/runnerconcierge`
 make hooks-install
 make build
 ./bin/runnerconcierge init
-./bin/runnerconcierge        # setup wizard
+./bin/runnerconcierge        # agent operating guide (no setup)
+./bin/runnerconcierge setup  # setup wizard (interactive or --non-interactive --yes)
 ./bin/runnerconcierge doctor
 ./bin/runnerconcierge status
 ```

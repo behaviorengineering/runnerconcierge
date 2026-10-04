@@ -22,6 +22,8 @@ Extend runnerconcierge packages and wizard stages.
 
 Workflow: `.github/workflows/e2e-live.yml` (`make e2e-live` only).
 
+CLI: bare invoke prints agent guide only; `setup` runs the wizard. Domain errors use `pkg/errdefs` (`Error()` omits cause argv; `FormatCLI` for stderr).
+
 ## Tests
 
 `make test` and `make smoke`. GitLab API: use `httptest` in `pkg/gitlabrunner`.

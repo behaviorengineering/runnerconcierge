@@ -11,6 +11,7 @@ import (
 	"github.com/behaviorengineering/gitvalet/pkg/gitexec"
 	"github.com/behaviorengineering/runnerconcierge/internal/config"
 	"github.com/behaviorengineering/runnerconcierge/pkg/detect"
+	"github.com/behaviorengineering/runnerconcierge/pkg/errdefs"
 	"github.com/behaviorengineering/runnerconcierge/pkg/gitlabrunner"
 	"github.com/behaviorengineering/runnerconcierge/pkg/install"
 	"github.com/behaviorengineering/runnerconcierge/pkg/preset"
@@ -159,17 +160,22 @@ func (r *Runner) Run(ctx context.Context) error {
 	runnerID := cp.RunnerID
 	if token == "" && runnerID == 0 {
 		client := gitlabrunner.NewClient(r.gitlabURL(), r.exec, nil)
-		req := r.createRequest(cp)
+		req, err := r.createRequest(ctx)
+		if err != nil {
+			return err
+		}
 		pat := strings.TrimSpace(r.opts.PAT)
 		runnerID, token, err = client.CreateRunner(ctx, req, pat)
 		if err != nil {
-			return err
+			return errdefs.New("setup", errdefs.CodeOf(err), "could not create GitLab runner", err)
 		}
 		cp.RunnerID = runnerID
 		cp.Description = req.Description
 		cp.Tags = req.TagList
 		cp.Executor = r.executor()
-		_ = r.store.Save(cp)
+		if err := r.store.Save(cp); err != nil {
+			return errdefs.New("setup", errdefs.CodeProcessConflict, "could not save checkpoint", err)
+		}
 	}
 	if token == "" && runnerID > 0 {
 		return fmt.Errorf("wizard: runner %d exists but glrt token missing; re-create in GitLab UI or pass --token", runnerID)
@@ -240,16 +246,16 @@ func (r *Runner) executor() string {
 	return r.cfg.DefaultExecutor
 }
 
-func (r *Runner) createRequest(cp *state.Checkpoint) gitlabrunner.CreateRunnerRequest {
+func (r *Runner) createRequest(ctx context.Context) (gitlabrunner.CreateRunnerRequest, error) {
 	tags := r.opts.TagList
 	if len(tags) == 0 {
 		tags = r.preset.TagList
 	}
 	runUntagged := r.opts.RunUntagged || r.preset.RunUntagged
 	desc := strings.TrimSpace(r.cfg.DescriptionPrefix + " " + hostname())
-	projectPath := r.opts.ProjectPath
+	projectPath := strings.TrimSpace(r.opts.ProjectPath)
 	if projectPath == "" {
-		projectPath = r.preset.RepoPath
+		projectPath = strings.TrimSpace(r.preset.RepoPath)
 	}
 	req := gitlabrunner.CreateRunnerRequest{
 		RunnerType:  "project_type",
@@ -257,16 +263,16 @@ func (r *Runner) createRequest(cp *state.Checkpoint) gitlabrunner.CreateRunnerRe
 		TagList:     tags,
 		RunUntagged: runUntagged,
 	}
-	if projectPath != "" {
-		pctx, pcancel := ensureDeadline(context.Background(), 2*time.Minute)
-		defer pcancel()
-		client := gitlabrunner.NewClient(r.gitlabURL(), r.exec, nil)
-		id, err := client.ResolveProjectID(pctx, projectPath)
-		if err == nil {
-			req.ProjectID = id
-		}
+	if projectPath == "" {
+		return req, errdefs.New("setup", errdefs.CodeInvalidScope, "GitLab project path is required (--repo)", nil)
 	}
-	return req
+	client := gitlabrunner.NewClient(r.gitlabURL(), r.exec, nil)
+	id, err := client.ResolveProjectID(ctx, projectPath)
+	if err != nil {
+		return req, errdefs.New("setup", errdefs.CodeOf(err), "could not resolve GitLab project id", err)
+	}
+	req.ProjectID = id
+	return req, nil
 }
 
 func (r *Runner) runnerName() string {

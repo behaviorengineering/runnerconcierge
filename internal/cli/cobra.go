@@ -2,28 +2,42 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/behaviorengineering/runnerconcierge/internal/config"
+	"github.com/behaviorengineering/runnerconcierge/pkg/errdefs"
 	"github.com/behaviorengineering/runnerconcierge/pkg/preset"
 	"github.com/behaviorengineering/runnerconcierge/pkg/wizard"
 	"github.com/spf13/cobra"
 )
 
-func dispatchCobra(ctx context.Context, args []string, w io.Writer) (int, bool) {
+type exitError struct {
+	code int
+	err  error
+}
+
+func (e *exitError) Error() string {
+	if e == nil || e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+func dispatchCobra(ctx context.Context, args []string, stdout, stderr io.Writer) (int, bool) {
 	if len(args) == 0 {
 		return 0, false
 	}
 	root := &cobra.Command{
 		Use:           "runnerconcierge",
-		Short:         "GitLab self-hosted runner setup wizard",
+		Short:         "GitLab self-hosted runner setup CLI",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.SetOut(w)
-	root.SetErr(w)
+	root.SetOut(stdout)
+	root.SetErr(stderr)
 
 	var initForce bool
 	initCmd := &cobra.Command{
@@ -34,7 +48,7 @@ func dispatchCobra(ctx context.Context, args []string, w io.Writer) (int, bool) 
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(w, "config: %s\n", path)
+			fmt.Fprintf(stdout, "config: %s\n", path)
 			return nil
 		},
 	}
@@ -45,9 +59,9 @@ func dispatchCobra(ctx context.Context, args []string, w io.Writer) (int, bool) 
 		Use:   "doctor",
 		Short: "Preflight report",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			code := runDoctor(ctx, []string{"-docker=" + fmt.Sprintf("%t", doctorDocker)}, w)
+			code := runDoctor(ctx, []string{"-docker=" + fmt.Sprintf("%t", doctorDocker)}, stdout, stderr)
 			if code == ExitDoctor {
-				return fmt.Errorf("doctor found blocking issues")
+				return &exitError{code: ExitDoctor, err: fmt.Errorf("doctor found blocking issues")}
 			}
 			if code != ExitOK {
 				return fmt.Errorf("doctor failed")
@@ -61,7 +75,7 @@ func dispatchCobra(ctx context.Context, args []string, w io.Writer) (int, bool) 
 		Use:   "verify",
 		Short: "Service status",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			if runVerify(ctx, nil, w) != ExitOK {
+			if runVerify(ctx, nil, stdout, stderr) != ExitOK {
 				return fmt.Errorf("verify failed")
 			}
 			return nil
@@ -72,9 +86,9 @@ func dispatchCobra(ctx context.Context, args []string, w io.Writer) (int, bool) 
 		Use:   "status",
 		Short: "Runner inventory and smells",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			code := runStatus(ctx, statusArgs(cmd), w)
+			code := runStatus(ctx, statusArgs(cmd), stdout)
 			if code == ExitDoctor {
-				return fmt.Errorf("status found blocking issues")
+				return &exitError{code: ExitDoctor, err: fmt.Errorf("status found blocking issues")}
 			}
 			if code != ExitOK {
 				return fmt.Errorf("status failed")
@@ -89,7 +103,7 @@ func dispatchCobra(ctx context.Context, args []string, w io.Writer) (int, bool) 
 		Use:   "repair-service",
 		Short: "Rebind runner service to login user",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if runRepairService(ctx, repairArgs(cmd), w) != ExitOK {
+			if runRepairService(ctx, repairArgs(cmd), stdout) != ExitOK {
 				return fmt.Errorf("repair-service failed")
 			}
 			return nil
@@ -108,10 +122,7 @@ func dispatchCobra(ctx context.Context, args []string, w io.Writer) (int, bool) 
 		Short: "Run setup wizard with flags",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			setupFlags.TagList = splitTags(setupTagList)
-			if runWizard(ctx, w, setupFlags.Preset, setupFlags, false) != ExitOK {
-				return fmt.Errorf("setup failed")
-			}
-			return nil
+			return runWizard(ctx, stdout, stderr, setupFlags.Preset, setupFlags)
 		},
 	}
 	bindWizardFlags(setupCmd, setupFlags, &setupTagList)
@@ -120,7 +131,7 @@ func dispatchCobra(ctx context.Context, args []string, w io.Writer) (int, bool) 
 		Use:   "version",
 		Short: "Print release identity",
 		Run: func(_ *cobra.Command, _ []string) {
-			fmt.Fprintf(w, "runnerconcierge %s\n", version)
+			fmt.Fprintf(stdout, "runnerconcierge %s\n", version)
 		},
 	}
 
@@ -128,7 +139,7 @@ func dispatchCobra(ctx context.Context, args []string, w io.Writer) (int, bool) 
 		Use:   "help",
 		Short: "Command catalog",
 		Run: func(_ *cobra.Command, _ []string) {
-			printHelp(w)
+			printHelp(stdout)
 		},
 	}
 
@@ -136,10 +147,15 @@ func dispatchCobra(ctx context.Context, args []string, w io.Writer) (int, bool) 
 	root.SetArgs(args)
 	if err := root.Execute(); err != nil {
 		if strings.Contains(err.Error(), "unknown command") {
-			printHelp(w)
+			printHelp(stderr)
 			return ExitUsage, true
 		}
-		fmt.Fprintf(w, "error: %v\n", err)
+		var ee *exitError
+		if errors.As(err, &ee) {
+			writef(stderr, "%s\n", errdefs.FormatCLI(ee.err))
+			return ee.code, true
+		}
+		writef(stderr, "%s\n", errdefs.FormatCLI(err))
 		return ExitFail, true
 	}
 	return ExitOK, true

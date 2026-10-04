@@ -37,6 +37,7 @@ func TestCreateRunnerHTTP(t *testing.T) {
 	defer cancel()
 	id, tok, err := client.CreateRunner(ctx, CreateRunnerRequest{
 		RunnerType:  "project_type",
+		ProjectID:   1,
 		Description: "test",
 		TagList:     []string{"ci"},
 	}, "glpat-test")

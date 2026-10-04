@@ -13,7 +13,8 @@ Operate the runnerconcierge GitLab runner setup CLI.
 
 ## Commands
 
-- `runnerconcierge` or `runnerconcierge setup`: wizard
+- `runnerconcierge`: agent operating guide (no setup)
+- `runnerconcierge setup`: wizard (`--repo group/project` required to create a project runner)
 - `runnerconcierge init`: seed config
 - `runnerconcierge doctor`: setup preflight
 - `runnerconcierge verify`: one-line service status (scripts)

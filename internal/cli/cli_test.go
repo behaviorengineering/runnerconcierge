@@ -1,0 +1,47 @@
+package cli
+
+import (
+	"bytes"
+	"context"
+	"strings"
+	"testing"
+)
+
+func TestRunBareInvokeAgentGuide(t *testing.T) {
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run(context.Background(), nil, &out, &errOut)
+	if code != ExitOK {
+		t.Fatalf("exit %d", code)
+	}
+	if strings.Contains(out.String(), "setup complete") {
+		t.Fatal("bare invoke should not run setup")
+	}
+	if !strings.Contains(out.String(), "Agent docs") {
+		t.Fatalf("expected agent guide: %q", out.String())
+	}
+	if strings.Contains(out.String(), "Bare invoke runs the interactive") {
+		t.Fatal("stale bare-invoke wizard wording")
+	}
+}
+
+func TestRunUnknownCommand(t *testing.T) {
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run(context.Background(), []string{"not-a-command"}, &out, &errOut)
+	if code != ExitUsage {
+		t.Fatalf("exit %d", code)
+	}
+}
+
+func TestRunVersion(t *testing.T) {
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run(context.Background(), []string{"version"}, &out, &errOut)
+	if code != ExitOK {
+		t.Fatalf("exit %d", code)
+	}
+	if !strings.Contains(out.String(), "runnerconcierge") {
+		t.Fatalf("version output: %q", out.String())
+	}
+}

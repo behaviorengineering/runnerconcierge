@@ -34,6 +34,7 @@ init: build ## Seed user config.yaml
 	./bin/runnerconcierge init
 
 smoke: build ## Smoke-test CLI surfaces
+	./bin/runnerconcierge | grep -q 'Agent docs'
 	./bin/runnerconcierge help
 	./bin/runnerconcierge version
 	./bin/runnerconcierge doctor

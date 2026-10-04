@@ -49,7 +49,10 @@ func (c *Client) CreateRunner(ctx context.Context, req CreateRunnerRequest, pat 
 		return 0, "", fmt.Errorf("gitlabrunner: client is nil")
 	}
 	if _, ok := ctx.Deadline(); !ok {
-		return 0, "", errdefs.New("CreateRunner", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+		return 0, "", errdefs.New(createRunnerOp, errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	if err := ValidateCreateRunnerRequest(req); err != nil {
+		return 0, "", err
 	}
 	if strings.TrimSpace(pat) != "" {
 		return c.createHTTP(ctx, req, pat)
@@ -76,17 +79,17 @@ func (c *Client) createGlab(ctx context.Context, req CreateRunnerRequest) (int, 
 	}
 	out, err := c.Exec.Run(ctx, "glab", args...)
 	if err != nil {
-		return 0, "", errdefs.New("CreateRunner", errdefs.CodeCreateFailed, "glab api failed", err)
+		return 0, "", newCreateErr(glabFailureMessage(err), err)
 	}
 	var resp struct {
 		ID    int    `json:"id"`
 		Token string `json:"token"`
 	}
 	if err := json.Unmarshal(out, &resp); err != nil {
-		return 0, "", errdefs.New("CreateRunner", errdefs.CodeCreateFailed, "parse response", err)
+		return 0, "", newCreateErr("parse response", err)
 	}
 	if resp.Token == "" {
-		return 0, "", errdefs.New("CreateRunner", errdefs.CodeCreateFailed, "empty token in response", nil)
+		return 0, "", newCreateErr("empty token in response", nil)
 	}
 	return resp.ID, resp.Token, nil
 }
@@ -113,28 +116,32 @@ func (c *Client) createHTTP(ctx context.Context, req CreateRunnerRequest, pat st
 	endpoint := c.BaseURL + "/api/v4/user/runners"
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
-		return 0, "", err
+		return 0, "", newCreateErr("build request", err)
 	}
 	httpReq.Header.Set("PRIVATE-TOKEN", pat)
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	res, err := c.HTTP.Do(httpReq)
 	if err != nil {
-		return 0, "", err
+		return 0, "", newCreateErr("HTTP request failed", err)
 	}
 	defer res.Body.Close()
 	body, _ := io.ReadAll(res.Body)
 	if res.StatusCode == http.StatusForbidden {
-		return 0, "", errdefs.New("CreateRunner", errdefs.CodeAuthScopeInsufficient, "forbidden; need create_runner scope", nil)
+		return 0, "", errdefs.New(createRunnerOp, errdefs.CodeAuthScopeInsufficient, "forbidden; need create_runner scope", nil)
 	}
 	if res.StatusCode != http.StatusCreated && res.StatusCode != http.StatusOK {
-		return 0, "", errdefs.New("CreateRunner", errdefs.CodeCreateFailed, fmt.Sprintf("http %d: %s", res.StatusCode, string(body)), nil)
+		msg := gitlabMessageFromBody(body)
+		if msg == "" {
+			msg = fmt.Sprintf("GitLab returned HTTP %d", res.StatusCode)
+		}
+		return 0, "", newCreateErr(msg, nil)
 	}
 	var parsed struct {
 		ID    int    `json:"id"`
 		Token string `json:"token"`
 	}
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return 0, "", err
+		return 0, "", newCreateErr("parse response", err)
 	}
 	return parsed.ID, parsed.Token, nil
 }
@@ -194,16 +201,16 @@ func (c *Client) ResolveProjectID(ctx context.Context, projectPath string) (int,
 	enc := url.PathEscape(projectPath)
 	out, err := c.Exec.Run(ctx, "glab", "api", "projects/"+enc)
 	if err != nil {
-		return 0, err
+		return 0, errdefs.New("gitlabrunner.ResolveProjectID", errdefs.CodeCreateFailed, glabFailureMessage(err), err)
 	}
 	var resp struct {
 		ID int `json:"id"`
 	}
 	if err := json.Unmarshal(out, &resp); err != nil {
-		return 0, err
+		return 0, errdefs.New("gitlabrunner.ResolveProjectID", errdefs.CodeCreateFailed, "parse response", err)
 	}
 	if resp.ID == 0 {
-		return 0, fmt.Errorf("gitlabrunner: project id not found for %s", projectPath)
+		return 0, errdefs.New("gitlabrunner.ResolveProjectID", errdefs.CodeInvalidScope, "project id not found for "+projectPath, nil)
 	}
 	return resp.ID, nil
 }
