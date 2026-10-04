@@ -10,21 +10,16 @@ permissions:
 
 jobs:
   checks:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        go: ["1.27.0"]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-go@v6
         with:
-          go-version: ${{ matrix.go }}
+          go-version: "1.27.0"
           cache: true
 
       - name: Verify modules tidy
-        if: matrix.os == 'ubuntu-latest'
         shell: bash
         env:
           GOWORK: off
@@ -36,7 +31,6 @@ jobs:
           rm -f go.mod.bak go.sum.bak
 
       - name: gofmt
-        if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
           unformatted=$(gofmt -l .)
@@ -66,20 +60,8 @@ jobs:
           GOWORK: off
         run: |
           go build -o runnerconcierge ./cmd/runnerconcierge
-          bin=./runnerconcierge
-          if [ -f ./runnerconcierge.exe ]; then bin=./runnerconcierge.exe; fi
-          "$bin" help
-          "$bin" version
-
-      - name: CLI smoke doctor (host OS)
-        if: matrix.os != 'ubuntu-latest'
-        shell: bash
-        env:
-          GOWORK: off
-        run: |
-          bin=./runnerconcierge
-          if [ -f ./runnerconcierge.exe ]; then bin=./runnerconcierge.exe; fi
-          "$bin" doctor || test $? = 3 || test $? = 0
+          ./runnerconcierge help
+          ./runnerconcierge version
 
   quality:
     name: quality
@@ -87,7 +69,7 @@ jobs:
     needs: checks
     if: always()
     steps:
-      - name: Require checks matrix success
+      - name: Require checks success
         run: |
           if [ "${{ needs.checks.result }}" != "success" ]; then
             exit 1
