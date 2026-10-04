@@ -21,6 +21,7 @@ Operate the runnerconcierge GitLab runner setup CLI.
 - `runnerconcierge verify`: one-line service status (scripts)
 - `runnerconcierge status`: full machine inventory and smells (`--json` for agents)
 - `runnerconcierge repair-service --runner-config PATH`: rebind service to login user (confirm or `--yes`; Windows password via prompt, `--windows-password`, or `RUNNERCONCIERGE_WINDOWS_PASSWORD`)
+- `runnerconcierge cleanup`: one-shot docker runner leftover prune (`--min-age`); `cleanup install --yes` / `cleanup uninstall` for the periodic helper (macOS LaunchAgent, Windows scheduled task)
 - `runnerconcierge runners gitlab`: interactive control plane (`--json`, `--name`, `--action`, `--yes`, `--local`, `--id`)
 - MUST NOT invoke `runnerconcierge runners` without `gitlab` or `github` (fail closed with `choose a forge`)
 

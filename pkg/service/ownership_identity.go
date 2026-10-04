@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/behaviorengineering/runnerconcierge/pkg/cleanup"
 	"github.com/behaviorengineering/runnerconcierge/pkg/redact"
 )
 
@@ -17,16 +18,20 @@ const (
 
 // MatchReason codes explain why a unit was included in inventory.
 const (
-	MatchReasonLaunchdLabel       = "launchd_label"
-	MatchReasonBrewFormula        = "brew_formula"
-	MatchReasonE2EFixture         = "e2e_fixture"
-	MatchReasonWindowsServiceName = "windows_service_name"
+	MatchReasonLaunchdLabel           = "launchd_label"
+	MatchReasonBrewFormula            = "brew_formula"
+	MatchReasonE2EFixture             = "e2e_fixture"
+	MatchReasonWindowsServiceName     = "windows_service_name"
+	MatchReasonRunnerconciergeCleanup = "runnerconcierge_cleanup"
 )
 
 // IsRunnerServiceName reports whether a service label matches runner inventory heuristics.
 func IsRunnerServiceName(name string) bool {
 	lower := strings.ToLower(strings.TrimSpace(name))
 	if strings.Contains(lower, "runnerconcierge-e2e-") {
+		return true
+	}
+	if strings.EqualFold(lower, cleanup.UnitName) {
 		return true
 	}
 	return strings.Contains(lower, "gitlab-runner")
@@ -44,10 +49,31 @@ func ClassifyRole(serviceName, kind, command string) string {
 	if commandInvokesGitLabRunner(command) {
 		return RoleSupervisor
 	}
+	if strings.EqualFold(strings.TrimSpace(serviceName), cleanup.UnitName) || commandInvokesRunnerconciergeCleanup(command) {
+		return RoleHelper
+	}
 	if IsRunnerServiceName(serviceName) {
 		return RoleHelper
 	}
 	return RoleUnknown
+}
+
+func commandInvokesRunnerconciergeCleanup(command string) bool {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return false
+	}
+	parts := strings.Fields(command)
+	for i, part := range parts {
+		part = strings.Trim(part, `"'`)
+		if filepath.Base(part) != "runnerconcierge" {
+			continue
+		}
+		if i+1 < len(parts) && strings.Trim(parts[i+1], `"'`) == "cleanup" {
+			return true
+		}
+	}
+	return false
 }
 
 func commandInvokesGitLabRunner(command string) bool {
@@ -80,6 +106,8 @@ func HumanMatchReason(code string) string {
 		return "runnerconcierge e2e fixture label"
 	case MatchReasonWindowsServiceName:
 		return "Windows service name or path mentions gitlab-runner"
+	case MatchReasonRunnerconciergeCleanup:
+		return "runnerconcierge periodic docker cleanup"
 	default:
 		if strings.TrimSpace(code) == "" {
 			return "-"
@@ -92,6 +120,9 @@ func HumanMatchReason(code string) string {
 func MatchReasonForLaunchd(serviceName string) string {
 	if strings.Contains(strings.ToLower(serviceName), "runnerconcierge-e2e-") {
 		return MatchReasonE2EFixture
+	}
+	if strings.EqualFold(strings.TrimSpace(serviceName), cleanup.UnitName) {
+		return MatchReasonRunnerconciergeCleanup
 	}
 	return MatchReasonLaunchdLabel
 }

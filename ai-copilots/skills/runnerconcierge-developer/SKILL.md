@@ -6,7 +6,7 @@ Extend runnerconcierge packages and wizard stages.
 
 - `cmd/runnerconcierge`: olly init, cli entry
 - `internal/cli`, `internal/wizard`, `internal/config`
-- `pkg/detect`, `pkg/install`, `pkg/gitlabrunner`, `pkg/gitlab/runners`, `pkg/service`, `pkg/inventory`, `pkg/repair`, `pkg/state`, `pkg/redact`, `pkg/preset`, `pkg/errdefs`, `pkg/forge`, `pkg/prompt`
+- `pkg/detect`, `pkg/install`, `pkg/gitlabrunner`, `pkg/gitlab/runners`, `pkg/cleanup`, `pkg/service`, `pkg/inventory`, `pkg/repair`, `pkg/state`, `pkg/redact`, `pkg/preset`, `pkg/errdefs`, `pkg/forge`, `pkg/prompt`
 - `internal/e2elive` (`e2e_live` build tag), `internal/e2elive/fixture` (Go-driven live fixture)
 
 ## Live e2e env

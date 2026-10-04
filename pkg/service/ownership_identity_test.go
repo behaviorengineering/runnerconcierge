@@ -11,6 +11,7 @@ func TestClassifyRole(t *testing.T) {
 		{"gitlab-runner", "launchd", "/usr/local/bin/gitlab-runner run --config /c.toml", RoleSupervisor},
 		{"com.hector.gitlab-runner-docker-cleanup", "launchd", "/bin/bash /cleanup.sh", RoleHelper},
 		{"com.hector.gitlab-runner-docker-cleanup", "launchd", "", RoleHelper},
+		{"runnerconcierge-docker-cleanup", "launchd", "/usr/bin/runnerconcierge cleanup", RoleHelper},
 		{"other", "launchd", "", RoleUnknown},
 	}
 	for _, tc := range cases {

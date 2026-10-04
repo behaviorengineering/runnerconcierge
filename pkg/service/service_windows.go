@@ -160,15 +160,22 @@ Get-CimInstance Win32_Service | Where-Object {
   }
 } | ConvertTo-Json -Compress
 `
-	out, err := m.exec.Run(ctx, "powershell", "-NoProfile", "-Command", script)
+	psOut, err := m.exec.Run(ctx, "powershell", "-NoProfile", "-Command", script)
 	if err != nil {
 		return nil, err
 	}
-	raw := strings.TrimSpace(string(out))
-	if raw == "" || raw == "null" {
-		return nil, nil
+	raw := strings.TrimSpace(string(psOut))
+	var list []Ownership
+	if raw != "" && raw != "null" {
+		list, err = parseWindowsOwnershipJSON(raw)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return parseWindowsOwnershipJSON(raw)
+	if task := windowsCleanupTaskOwnership(ctx, m.exec); task != nil {
+		list = append(list, *task)
+	}
+	return list, nil
 }
 
 func formatWindowsUser(user string) string {

@@ -39,6 +39,7 @@ smoke: build ## Smoke-test CLI surfaces
 	./bin/runnerconcierge version
 	./bin/runnerconcierge doctor
 	./bin/runnerconcierge runners gitlab --help | grep -q 'GitLab runners'
+	./bin/runnerconcierge cleanup --help | grep -q 'Prune stale'
 	./bin/runnerconcierge unknown || test $$? = 2
 
 ci: tidy fmt vet test build smoke ## CI aggregate

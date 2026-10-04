@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/behaviorengineering/runnerconcierge/internal/config"
+	"github.com/behaviorengineering/runnerconcierge/pkg/cleanup"
 	"github.com/behaviorengineering/runnerconcierge/pkg/errdefs"
 	"github.com/behaviorengineering/runnerconcierge/pkg/forge"
 	"github.com/behaviorengineering/runnerconcierge/pkg/github"
@@ -160,6 +162,35 @@ func dispatchCobra(ctx context.Context, args []string, stdout, stderr io.Writer)
 	runnersGitLab.Flags().StringVar(&runnersCfg.WindowsPassword, "windows-password", "", "Windows service password for repair")
 	runnersCmd.AddCommand(runnersGitLab, githubUnsupportedCmd(forge.VerbRunners))
 
+	var cleanupCfg cleanup.Config
+	cleanupCmd := &cobra.Command{
+		Use:   "cleanup",
+		Short: "Prune stale GitLab docker-executor leftovers",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return runCleanup(ctx, stdout, stderr, cleanupCfg)
+		},
+	}
+	cleanupCmd.Flags().DurationVar(&cleanupCfg.MinAge, "min-age", time.Hour, "minimum age before removing exited runner containers")
+	cleanupCmd.Flags().BoolVar(&cleanupCfg.AllowYes, "yes", false, "allow replacing legacy cleanup agents on install")
+
+	cleanupInstall := &cobra.Command{
+		Use:   "install",
+		Short: "Install periodic cleanup helper",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return runCleanupInstall(ctx, stdout, stderr, cleanupCfg)
+		},
+	}
+	cleanupInstall.Flags().DurationVar(&cleanupCfg.Interval, "interval", 10*time.Minute, "run interval for scheduled helper")
+
+	cleanupUninstall := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Remove periodic cleanup helper",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return runCleanupUninstall(ctx, stdout, stderr, cleanupCfg)
+		},
+	}
+	cleanupCmd.AddCommand(cleanupInstall, cleanupUninstall)
+
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print release identity",
@@ -176,7 +207,7 @@ func dispatchCobra(ctx context.Context, args []string, stdout, stderr io.Writer)
 		},
 	}
 
-	root.AddCommand(initCmd, doctorCmd, verifyCmd, statusCmd, repairCmd, setupCmd, runnersCmd, versionCmd, helpCmd)
+	root.AddCommand(initCmd, doctorCmd, verifyCmd, statusCmd, repairCmd, setupCmd, cleanupCmd, runnersCmd, versionCmd, helpCmd)
 	root.SetArgs(args)
 	if err := root.Execute(); err != nil {
 		if strings.Contains(err.Error(), "unknown command") {

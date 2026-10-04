@@ -30,6 +30,7 @@ const (
 	CodeServiceStopped        Code = "service_stopped"
 	CodeRunnerBinaryMissing   Code = "runner_binary_missing"
 	CodeUnsupportedForge      Code = "unsupported_forge"
+	CodeDockerUnavailable     Code = "docker_unavailable"
 )
 
 // Error is a typed domain error with stable code.
