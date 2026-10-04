@@ -25,7 +25,7 @@ description: >-
 **CONSTRAINT:** Bare invoke MUST print the agent guide and MUST NOT start setup or a daemon.
 
 - MUST: `cleanup` stay finite (one prune pass); interval lives in LaunchAgent / schtasks, not a long-running subcommand
-- MUST: list `cleanup` and `runners gitlab` in `printAgentGuide` / `printHelp`
+- MUST: list `cleanup`, `runners gitlab list`, and `runners gitlab setup` in `printAgentGuide` / `printHelp`
 - MUST: `--yes` on `cleanup` be persistent so `cleanup install --yes` works
 - MUST NOT: treat `cleanup` as `service.Manager.Install` (that path talks to `gitlab-runner`)
 - Enforcement: `make smoke`; `cleanup --help` and `cleanup install --help` list `--yes`
@@ -77,9 +77,17 @@ PROHIBITED:
 - Enforcement: `pkg/service` identity tests + `pkg/gitlab/runners` join/inspect tests
 - Violation: STOP, copy identity in `JoinTargets` from Ownership
 
+## gitlab-runner argv
+
+**CONSTRAINT:** MUST load [gitlab-runner-cli/SKILL.md](../gitlab-runner-cli/SKILL.md) when changing `BuildRegisterArgv`, `BuildUnregisterArgv`, or adding flags executed via `gitlab-runner`.
+
+- MUST: keep static argv tests plus `pkg/gitlabrunner/runner_compat_test.go` help contracts in sync with builders
+- Enforcement: `go test ./pkg/gitlabrunner/...`
+- Violation: STOP, follow gitlab-runner-cli skill, re-run tests
+
 ## Errors and tests
 
-CLI: `runners gitlab` is the forge-scoped control plane (`service.Manager.Stop`, `gitlabrunner.ListOwnedRunners` / `MatchRunner`). Domain errors use `pkg/errdefs` (`Error()` omits cause argv; `FormatCLI` for stderr).
+CLI: `runners gitlab list` is the forge-scoped control plane (`service.Manager.Stop`, `gitlabrunner.ListOwnedRunners` / `MatchRunner`); `runners gitlab setup` runs the wizard. Domain errors use `pkg/errdefs` (`Error()` omits cause argv; `FormatCLI` for stderr).
 
 **CONSTRAINT:** MUST keep quality gates green before claiming a Go change done.
 

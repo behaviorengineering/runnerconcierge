@@ -81,6 +81,9 @@ func JoinTargets(rep *inventory.Report) []Target {
 		if attached[services[i].ServiceName] {
 			continue
 		}
+		if services[i].Role == service.RoleSupervisor {
+			continue
+		}
 		t := Target{
 			Key:         "svc:" + services[i].ServiceName,
 			Kind:        TargetKindServiceOnly,
@@ -173,21 +176,44 @@ func dedupeServices(in []service.Ownership) []service.Ownership {
 func attachService(services []service.Ownership, configPath string, configCount int, attached map[string]bool) *service.Ownership {
 	for i := range services {
 		s := &services[i]
-		if attached[s.ServiceName] {
+		if strings.TrimSpace(s.ConfigPath) == "" || s.ConfigPath != configPath {
 			continue
 		}
-		if s.ConfigPath == configPath {
-			return s
-		}
+		return s
 	}
 	if len(services) == 1 && configCount == 1 {
 		for i := range services {
-			if !attached[services[i].ServiceName] {
-				return &services[i]
+			s := &services[i]
+			if !attached[s.ServiceName] {
+				return s
+			}
+			if s.Role == service.RoleSupervisor {
+				return s
 			}
 		}
 	}
+	if configCount > 0 {
+		for i := range services {
+			s := &services[i]
+			if s.Role != service.RoleSupervisor || !isGitLabSupervisorService(s.ServiceName) {
+				continue
+			}
+			if attached[s.ServiceName] {
+				return s
+			}
+			return s
+		}
+	}
 	return nil
+}
+
+func isGitLabSupervisorService(name string) bool {
+	switch strings.TrimSpace(name) {
+	case "gitlab-runner", "sh.brew.gitlab-runner":
+		return true
+	default:
+		return false
+	}
 }
 
 // PickTarget resolves a target from flags.
@@ -224,4 +250,12 @@ func IsHelperServiceTarget(t *Target) bool {
 		return false
 	}
 	return t.Kind == TargetKindServiceOnly || t.Role == service.RoleHelper
+}
+
+// IsSupervisorOnlyTarget reports a service-only row for the gitlab-runner supervisor loop.
+func IsSupervisorOnlyTarget(t *Target) bool {
+	if t == nil {
+		return false
+	}
+	return t.Kind == TargetKindServiceOnly && t.Role == service.RoleSupervisor
 }

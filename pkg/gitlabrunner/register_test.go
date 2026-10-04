@@ -24,4 +24,7 @@ func TestBuildRegisterArgv_noServerTags(t *testing.T) {
 	if !strings.Contains(joined, "--shell pwsh") {
 		t.Fatalf("expected pwsh shell: %v", args)
 	}
+	if strings.Contains(joined, "--working-directory") {
+		t.Fatalf("working directory is install-only on 19.x register: %v", args)
+	}
 }

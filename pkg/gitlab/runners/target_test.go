@@ -49,6 +49,9 @@ func TestJoinTargets_twoRunnersOneService(t *testing.T) {
 	if targets[0].EntryCount != 2 || targets[1].EntryCount != 2 {
 		t.Fatalf("entry counts %d %d", targets[0].EntryCount, targets[1].EntryCount)
 	}
+	if targets[0].ServiceName != "gitlab-runner" || targets[1].ServiceName != "gitlab-runner" {
+		t.Fatalf("both registrations should share supervisor: %+v %+v", targets[0], targets[1])
+	}
 }
 
 func TestJoinTargets_orphanService(t *testing.T) {
@@ -89,14 +92,36 @@ func TestJoinTargets_registrationsAndServices(t *testing.T) {
 		},
 	}
 	targets := JoinTargets(rep)
-	if len(targets) != 4 {
-		t.Fatalf("expected 4 targets, got %d", len(targets))
+	if len(targets) != 3 {
+		t.Fatalf("expected 3 targets, got %d", len(targets))
 	}
 	if targets[0].Kind != TargetKindRegistration {
 		t.Fatalf("first should be registration")
 	}
-	if targets[2].Role != service.RoleSupervisor {
-		t.Fatalf("supervisor at index 2: %+v", targets[2])
+	if targets[0].Role != service.RoleSupervisor || targets[0].ServiceName != "gitlab-runner" {
+		t.Fatalf("supervisor should attach to registration: %+v", targets[0])
+	}
+	if targets[1].ServiceName != "gitlab-runner" {
+		t.Fatalf("second registration should share supervisor: %+v", targets[1])
+	}
+	if targets[2].Role != service.RoleHelper {
+		t.Fatalf("helper at index 2: %+v", targets[2])
+	}
+}
+
+func TestJoinTargets_hidesSupervisorServiceOnly(t *testing.T) {
+	rep := &inventory.Report{
+		Services: []service.Ownership{
+			{ServiceName: "gitlab-runner", Kind: "brew_services", State: "started", Role: service.RoleSupervisor},
+			{ServiceName: "runnerconcierge-docker-cleanup", Kind: "launchd", Role: service.RoleHelper},
+		},
+	}
+	targets := JoinTargets(rep)
+	if len(targets) != 1 {
+		t.Fatalf("expected cleanup helper only, got %d: %+v", len(targets), targets)
+	}
+	if targets[0].ServiceName != "runnerconcierge-docker-cleanup" {
+		t.Fatalf("got %+v", targets[0])
 	}
 }
 

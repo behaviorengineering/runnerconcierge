@@ -12,7 +12,8 @@ type UnregisterArgs struct {
 	ConfigPath string
 }
 
-// BuildUnregisterArgv returns non-interactive unregister arguments.
+// BuildUnregisterArgv returns argv for gitlab-runner unregister.
+// Do not add --non-interactive; the unregister subcommand does not accept it (19.x).
 func BuildUnregisterArgv(in UnregisterArgs) ([]string, error) {
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
@@ -20,7 +21,6 @@ func BuildUnregisterArgv(in UnregisterArgs) ([]string, error) {
 	}
 	args := []string{
 		"unregister",
-		"--non-interactive",
 		"--name", name,
 	}
 	if strings.TrimSpace(in.ConfigPath) != "" {

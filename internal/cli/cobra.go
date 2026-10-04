@@ -120,24 +120,19 @@ func dispatchCobra(ctx context.Context, args []string, stdout, stderr io.Writer)
 	repairCmd.Flags().String("windows-password", "", "Windows service password")
 	repairCmd.Flags().Bool("brew", false, "use brew services on macOS")
 
-	setupFlags := &wizard.Options{Preset: preset.Preset{}}
-	var setupTagList string
-	setupCmd := &cobra.Command{
-		Use:   "setup",
-		Short: "Run setup wizard with flags",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			setupFlags.TagList = splitTags(setupTagList)
-			return runWizard(ctx, stdout, stderr, setupFlags.Preset, setupFlags)
-		},
-	}
-	bindWizardFlags(setupCmd, setupFlags, &setupTagList)
-
-	runnersCmd := verbNeedsForge(forge.VerbRunners, "List and act on a forge runner")
+	runnersCmd := verbNeedsForge(forge.VerbRunners, "GitLab or GitHub runner commands")
 	var runnersCfg gitlabrunners.Config
 	var runnersAction string
 	runnersGitLab := &cobra.Command{
 		Use:   forge.GitLab,
-		Short: "GitLab runners control plane",
+		Short: "GitLab runners (list or setup)",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return forge.NeedSubcommand(forge.VerbRunners, forge.GitLab)
+		},
+	}
+	runnersGitLabList := &cobra.Command{
+		Use:   "list",
+		Short: "List runners and run inspect/stop/start/repair/remove",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if runnersCfg.Action == "" && runnersAction != "" {
 				act, ok := gitlabrunners.ParseAction(runnersAction)
@@ -149,17 +144,31 @@ func dispatchCobra(ctx context.Context, args []string, stdout, stderr io.Writer)
 			return runGitLabRunners(ctx, stdout, stderr, runnersCfg)
 		},
 	}
-	runnersGitLab.Flags().BoolVar(&runnersCfg.JSON, "json", false, "JSON output")
-	runnersGitLab.Flags().StringVar(&runnersCfg.Name, "name", "", "runner name from config.toml")
-	runnersGitLab.Flags().StringVar(&runnersCfg.ServiceName, "service", "", "service unit name")
-	runnersGitLab.Flags().StringVar(&runnersCfg.ConfigPath, "config", "", "runner config.toml path")
-	runnersGitLab.Flags().IntVar(&runnersCfg.GitLabID, "id", 0, "GitLab runner id")
-	runnersGitLab.Flags().BoolVar(&runnersCfg.LocalOnly, "local", false, "machine only; skip GitLab API")
-	runnersGitLab.Flags().StringVar(&runnersAction, "action", "", "inspect|stop|start|repair|remove")
-	runnersGitLab.Flags().BoolVar(&runnersCfg.NonInteractive, "non-interactive", false, "no prompts")
-	runnersGitLab.Flags().BoolVar(&runnersCfg.AllowYes, "yes", false, "skip confirmations")
-	runnersGitLab.Flags().StringVar(&runnersCfg.PAT, "pat", "", "GitLab PAT")
-	runnersGitLab.Flags().StringVar(&runnersCfg.WindowsPassword, "windows-password", "", "Windows service password for repair")
+	runnersGitLabList.Flags().BoolVar(&runnersCfg.JSON, "json", false, "JSON output")
+	runnersGitLabList.Flags().StringVar(&runnersCfg.Name, "name", "", "runner name from config.toml")
+	runnersGitLabList.Flags().StringVar(&runnersCfg.ServiceName, "service", "", "service unit name")
+	runnersGitLabList.Flags().StringVar(&runnersCfg.ConfigPath, "config", "", "runner config.toml path")
+	runnersGitLabList.Flags().IntVar(&runnersCfg.GitLabID, "id", 0, "GitLab runner id")
+	runnersGitLabList.Flags().BoolVar(&runnersCfg.LocalOnly, "local", false, "machine only; skip GitLab API")
+	runnersGitLabList.Flags().StringVar(&runnersAction, "action", "", "inspect|stop|start|repair|remove")
+	runnersGitLabList.Flags().BoolVar(&runnersCfg.NonInteractive, "non-interactive", false, "no prompts")
+	runnersGitLabList.Flags().BoolVar(&runnersCfg.AllowYes, "yes", false, "skip confirmations")
+	runnersGitLabList.Flags().StringVar(&runnersCfg.PAT, "pat", "", "GitLab PAT")
+	runnersGitLabList.Flags().StringVar(&runnersCfg.WindowsPassword, "windows-password", "", "Windows service password for repair")
+
+	setupFlags := &wizard.Options{Preset: preset.Preset{}}
+	var setupTagList string
+	runnersGitLabSetup := &cobra.Command{
+		Use:   "setup",
+		Short: "Register runner, install service, and verify online",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			setupFlags.TagList = splitTags(setupTagList)
+			return runWizard(ctx, stdout, stderr, setupFlags.Preset, setupFlags)
+		},
+	}
+	bindWizardFlags(runnersGitLabSetup, setupFlags, &setupTagList)
+
+	runnersGitLab.AddCommand(runnersGitLabList, runnersGitLabSetup)
 	runnersCmd.AddCommand(runnersGitLab, githubUnsupportedCmd(forge.VerbRunners))
 
 	var cleanupCfg cleanup.Config
@@ -207,7 +216,7 @@ func dispatchCobra(ctx context.Context, args []string, stdout, stderr io.Writer)
 		},
 	}
 
-	root.AddCommand(initCmd, doctorCmd, verifyCmd, statusCmd, repairCmd, setupCmd, cleanupCmd, runnersCmd, versionCmd, helpCmd)
+	root.AddCommand(initCmd, doctorCmd, verifyCmd, statusCmd, repairCmd, cleanupCmd, runnersCmd, versionCmd, helpCmd)
 	root.SetArgs(args)
 	if err := root.Execute(); err != nil {
 		if strings.Contains(err.Error(), "unknown command") {

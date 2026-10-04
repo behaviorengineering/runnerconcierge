@@ -39,6 +39,9 @@ smoke: build ## Smoke-test CLI surfaces
 	./bin/runnerconcierge version
 	./bin/runnerconcierge doctor
 	./bin/runnerconcierge runners gitlab --help | grep -q 'GitLab runners'
+	./bin/runnerconcierge runners gitlab list --help | grep -q 'inspect'
+	./bin/runnerconcierge runners gitlab setup --help | grep -q 'resume'
+	./bin/runnerconcierge setup || test $$? = 2
 	./bin/runnerconcierge cleanup --help | grep -q 'Prune stale'
 	./bin/runnerconcierge unknown || test $$? = 2
 

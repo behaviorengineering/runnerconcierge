@@ -158,6 +158,9 @@ func (c *Controller) actionInspect(ctx context.Context, t *Target) error {
 }
 
 func (c *Controller) actionStop(ctx context.Context, t *Target) error {
+	if err := c.guardSupervisorOnlyTarget(t, "stop"); err != nil {
+		return err
+	}
 	if err := c.warnServiceScope(ctx, t); err != nil {
 		return err
 	}
@@ -168,6 +171,9 @@ func (c *Controller) actionStop(ctx context.Context, t *Target) error {
 }
 
 func (c *Controller) actionStart(ctx context.Context, t *Target) error {
+	if err := c.guardSupervisorOnlyTarget(t, "start"); err != nil {
+		return err
+	}
 	if err := c.warnServiceScope(ctx, t); err != nil {
 		return err
 	}
@@ -205,6 +211,9 @@ func (c *Controller) actionRepair(ctx context.Context, t *Target) error {
 }
 
 func (c *Controller) actionRemove(ctx context.Context, t *Target) error {
+	if err := c.guardSupervisorOnlyTarget(t, "remove"); err != nil {
+		return err
+	}
 	if !c.cfg.AllowYes {
 		pr := c.cfg.Prompter
 		if pr == nil {
@@ -341,6 +350,15 @@ func (c *Controller) runnerOnline(ctx context.Context, t *Target, id int) string
 		return "no"
 	}
 	return ""
+}
+
+func (c *Controller) guardSupervisorOnlyTarget(t *Target, verb string) error {
+	if !IsSupervisorOnlyTarget(t) {
+		return nil
+	}
+	return errdefs.New("runners.gitlab."+verb, errdefs.CodeInvalidScope,
+		"the gitlab-runner supervisor is not managed from a service-only row; use a registered runner for stop/remove, repair-service to fix the unit, or brew services for the formula service",
+		nil)
 }
 
 func (c *Controller) warnServiceScope(ctx context.Context, t *Target) error {

@@ -47,6 +47,7 @@ ai-copilots/
   BOOTSTRAP.md
   skills/runnerconcierge-operator/SKILL.md
   skills/runnerconcierge-developer/SKILL.md
+  skills/gitlab-runner-cli/SKILL.md
 ```
 
 ---
@@ -67,6 +68,7 @@ Canonical sources:
 |----------|-------------------|
 | Skill tree | `ai-copilots/skills/runnerconcierge-operator/` |
 | Skill tree | `ai-copilots/skills/runnerconcierge-developer/` |
+| Skill tree | `ai-copilots/skills/gitlab-runner-cli/` |
 
 Discovery paths:
 
@@ -84,6 +86,7 @@ MOD="$(go list -m -f '{{.Dir}}' github.com/behaviorengineering/runnerconcierge)"
 mkdir -p .cursor/skills
 ln -snf "$MOD/ai-copilots/skills/runnerconcierge-operator" .cursor/skills/runnerconcierge-operator
 ln -snf "$MOD/ai-copilots/skills/runnerconcierge-developer" .cursor/skills/runnerconcierge-developer
+ln -snf "$MOD/ai-copilots/skills/gitlab-runner-cli" .cursor/skills/gitlab-runner-cli
 ```
 
 When the workspace root is this library itself, relative links are fine:
@@ -91,6 +94,7 @@ When the workspace root is this library itself, relative links are fine:
 ```bash
 ln -snf ../ai-copilots/skills/runnerconcierge-operator .cursor/skills/runnerconcierge-operator
 ln -snf ../ai-copilots/skills/runnerconcierge-developer .cursor/skills/runnerconcierge-developer
+ln -snf ../ai-copilots/skills/gitlab-runner-cli .cursor/skills/gitlab-runner-cli
 ```
 
 **Windows:** prefer junction or developer-mode symlink; copy fallback only with user approval.
@@ -106,6 +110,7 @@ MOD="$(go list -m -f '{{.Dir}}' github.com/behaviorengineering/runnerconcierge)"
 test -f "$MOD/ai-copilots/BOOTSTRAP.md"
 test -f "$MOD/ai-copilots/skills/runnerconcierge-operator/SKILL.md"
 test -f "$MOD/ai-copilots/skills/runnerconcierge-developer/SKILL.md"
+test -f "$MOD/ai-copilots/skills/gitlab-runner-cli/SKILL.md"
 make -C "$MOD" hooks-install
 ```
 

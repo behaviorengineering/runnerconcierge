@@ -11,7 +11,7 @@ make hooks-install
 make build
 ./bin/runnerconcierge init
 ./bin/runnerconcierge        # agent operating guide (no setup)
-./bin/runnerconcierge setup  # setup wizard; on macOS/Windows also installs docker cleanup schedule
+./bin/runnerconcierge runners gitlab setup  # wizard; on macOS/Windows also installs docker cleanup schedule
 ./bin/runnerconcierge doctor
 ./bin/runnerconcierge status
 ```
@@ -21,9 +21,9 @@ Day-2 inventory (manual installs, wrong service user):
 ```bash
 ./bin/runnerconcierge status
 ./bin/runnerconcierge repair-service --runner-config ~/.gitlab-runner/config.toml
-./bin/runnerconcierge runners gitlab
-./bin/runnerconcierge runners gitlab --json
-./bin/runnerconcierge runners gitlab --name "$(hostname)" --action remove --yes
+./bin/runnerconcierge runners gitlab list
+./bin/runnerconcierge runners gitlab list --json
+./bin/runnerconcierge runners gitlab list --name "$(hostname)" --action remove --yes
 ./bin/runnerconcierge cleanup
 ./bin/runnerconcierge cleanup install --yes
 ```
@@ -56,7 +56,7 @@ make e2e-live
 Automation:
 
 ```bash
-runnerconcierge setup --non-interactive --yes \
+runnerconcierge runners gitlab setup --non-interactive --yes \
   --repo group/project --tag-list my-tag --pat "$GITLAB_TOKEN"
 ```
 

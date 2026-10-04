@@ -145,4 +145,53 @@ func TestRemove_callsDeleteRunner(t *testing.T) {
 	if deleted != 1 {
 		t.Fatalf("delete calls %d", deleted)
 	}
+	assertUnregisterArgv(t, exec)
+}
+
+func assertUnregisterArgv(t *testing.T, exec *recordExec) {
+	t.Helper()
+	var saw bool
+	for _, c := range exec.calls {
+		if len(c) < 2 || c[0] != "/bin/gitlab-runner" || c[1] != "unregister" {
+			continue
+		}
+		saw = true
+		joined := strings.Join(c, " ")
+		if strings.Contains(joined, "--non-interactive") {
+			t.Fatalf("unregister must not use --non-interactive: %v", c)
+		}
+		if !strings.Contains(joined, "--name") {
+			t.Fatalf("unregister missing --name: %v", c)
+		}
+	}
+	if !saw {
+		t.Fatal("expected gitlab-runner unregister call")
+	}
+}
+
+func TestRemove_unregisterArgv(t *testing.T) {
+	path := writeTempConfig(t, 1, "https://gitlab.example/", 0)
+	exec := &recordExec{}
+	svc := &stubSvc{}
+	var out bytes.Buffer
+	cfg := Config{
+		Exec:       exec,
+		Out:        &out,
+		Service:    svc,
+		ConfigPath: path,
+		Name:       "runner",
+		Action:     ActionRemove,
+		AllowYes:   true,
+		LocalOnly:  true,
+	}
+	ctrl, err := cfg.Create()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := ctrl.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertUnregisterArgv(t, exec)
 }

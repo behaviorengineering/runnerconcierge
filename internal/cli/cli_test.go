@@ -80,6 +80,67 @@ func TestCleanupInstallHelpIncludesYes(t *testing.T) {
 	}
 }
 
+func TestRootSetupUnknown(t *testing.T) {
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run(context.Background(), []string{"setup"}, &out, &errOut)
+	if code != ExitUsage {
+		t.Fatalf("exit %d", code)
+	}
+	if !strings.Contains(errOut.String(), "runners") {
+		t.Fatalf("help should mention runners: %q", errOut.String())
+	}
+}
+
+func TestRunnersGitLabNeedSubcommand(t *testing.T) {
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run(context.Background(), []string{"runners", "gitlab"}, &out, &errOut)
+	if code == ExitOK {
+		t.Fatal("expected failure without list|setup")
+	}
+	combined := errOut.String() + out.String()
+	if !strings.Contains(combined, "list") || !strings.Contains(combined, "setup") {
+		t.Fatalf("stderr+stdout: %q", combined)
+	}
+}
+
+func TestRunnersGitLabListHelp(t *testing.T) {
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run(context.Background(), []string{"runners", "gitlab", "list", "--help"}, &out, &errOut)
+	if code != ExitOK {
+		t.Fatalf("exit %d stderr %q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "inspect") {
+		t.Fatalf("list help: %q", out.String())
+	}
+}
+
+func TestRunnersGitLabSetupHelp(t *testing.T) {
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run(context.Background(), []string{"runners", "gitlab", "setup", "--help"}, &out, &errOut)
+	if code != ExitOK {
+		t.Fatalf("exit %d stderr %q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "resume") {
+		t.Fatalf("setup help: %q", out.String())
+	}
+}
+
+func TestRunnersGitLabListJSON(t *testing.T) {
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run(context.Background(), []string{"runners", "gitlab", "list", "--json"}, &out, &errOut)
+	if code != ExitOK {
+		t.Fatalf("exit %d stderr %q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "[") {
+		t.Fatalf("expected JSON array: %q", out.String())
+	}
+}
+
 func TestRunVersion(t *testing.T) {
 	var out bytes.Buffer
 	var errOut bytes.Buffer

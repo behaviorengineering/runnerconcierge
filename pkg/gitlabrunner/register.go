@@ -44,9 +44,7 @@ func BuildRegisterArgv(in RegisterArgs) ([]string, error) {
 	if in.ConfigPath != "" {
 		args = append(args, "--config", in.ConfigPath)
 	}
-	if in.WorkingDirectory != "" {
-		args = append(args, "--working-directory", in.WorkingDirectory)
-	}
+	// WorkingDirectory is for gitlab-runner install (service), not register (19.x).
 	switch executor {
 	case "shell":
 		shell := in.Shell
