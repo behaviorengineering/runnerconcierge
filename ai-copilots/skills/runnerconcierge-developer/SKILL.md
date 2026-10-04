@@ -1,13 +1,86 @@
+---
+name: runnerconcierge-developer
+description: >-
+  Extend runnerconcierge packages, cobra verbs, service identity, and docker
+  cleanup schedule. Use when changing pkg/cleanup, pkg/gitlab/runners,
+  pkg/service, CLI wiring, or e2e fixtures. Not for operating a live runner.
+---
+
 # runnerconcierge-developer
 
-Extend runnerconcierge packages and wizard stages.
+**Moral:** Keep prune logic in `pkg/cleanup` and gitlab-runner lifecycle in `pkg/service`. The schedule invokes this binary; it MUST NOT ship OS shell scripts.
 
 ## Layout
 
-- `cmd/runnerconcierge`: olly init, cli entry
+- `cmd/runnerconcierge`: olly init, CLI entry
 - `internal/cli`, `internal/wizard`, `internal/config`
-- `pkg/detect`, `pkg/install`, `pkg/gitlabrunner`, `pkg/gitlab/runners`, `pkg/cleanup`, `pkg/service`, `pkg/inventory`, `pkg/repair`, `pkg/state`, `pkg/redact`, `pkg/preset`, `pkg/errdefs`, `pkg/forge`, `pkg/prompt`
-- `internal/e2elive` (`e2e_live` build tag), `internal/e2elive/fixture` (Go-driven live fixture)
+- `pkg/cleanup`: one-shot prune + macOS LaunchAgent / Windows `schtasks` install
+- `pkg/gitlab/runners`: forge-scoped control plane
+- `pkg/service`: gitlab-runner Install/Start/Stop/Uninstall + `ListOwnership` identity
+- `pkg/detect`, `pkg/install`, `pkg/gitlabrunner`, `pkg/inventory`, `pkg/repair`, `pkg/state`, `pkg/redact`, `pkg/preset`, `pkg/errdefs`, `pkg/forge`, `pkg/prompt`
+- `internal/e2elive` (`e2e_live` build tag), `internal/e2elive/fixture`
+
+## CLI surface
+
+**CONSTRAINT:** Bare invoke MUST print the agent guide and MUST NOT start setup or a daemon.
+
+- MUST: `cleanup` stay finite (one prune pass); interval lives in LaunchAgent / schtasks, not a long-running subcommand
+- MUST: list `cleanup` and `runners gitlab` in `printAgentGuide` / `printHelp`
+- MUST: `--yes` on `cleanup` be persistent so `cleanup install --yes` works
+- MUST NOT: treat `cleanup` as `service.Manager.Install` (that path talks to `gitlab-runner`)
+- Enforcement: `make smoke`; `cleanup --help` and `cleanup install --help` list `--yes`
+- Violation: STOP, fix cobra flags, re-run smoke
+
+CORRECT:
+```text
+runnerconcierge cleanup
+runnerconcierge cleanup install --yes --interval 10m
+```
+
+PROHIBITED:
+```text
+# cobra --yes only on parent cleanup; install rejects unknown flag
+# Manager.Install used to write a LaunchAgent that runs a .sh
+```
+
+## Cleanup package
+
+**CONSTRAINT:** Docker leftover prune MUST live in `pkg/cleanup` with `Config.Create()`.
+
+- MUST: panic when `Exec` is nil; error when `Out` is nil
+- MUST: call Docker through `gitexec.Exec`, not `os/exec` and not the Docker SDK
+- MUST: skip with nil error when `docker info` fails (scheduled jobs MUST NOT flap)
+- MUST: fail with `errdefs.CodeDockerUnavailable` when `ps` / `volume ls` fail after info succeeded
+- MUST: portable unit name `runnerconcierge-docker-cleanup` (MUST NOT hardcode a host login or `com.<user>.*`)
+- MUST: Darwin install replace LaunchAgents whose command basename is `gitlab-runner-docker-cleanup` only with `AllowYes`
+- MUST: Windows install use `schtasks`, not a Windows Service
+- MUST: Linux install/uninstall return `CodeUnsupportedOS`; `Run` remains allowed
+- Enforcement: fake-exec tests in `pkg/cleanup`; `go test ./pkg/cleanup/...`
+- Violation: STOP, restore Create/errdefs/skip rules, re-test
+
+## Service identity
+
+**CONSTRAINT:** `ListOwnership` MUST classify leftover GitLab-related units at discovery.
+
+- MUST: `IsRunnerServiceName` include `runnerconcierge-docker-cleanup` and `gitlab-runner` / `runnerconcierge-e2e-`
+- MUST: `ClassifyRole` treat cleanup unit (name or `runnerconcierge cleanup` argv) as `helper`
+- MUST: match reason `runnerconcierge_cleanup` for the product helper
+- MUST: Windows `ListOwnership` probe the scheduled task (kind `scheduled_task`); `ProcessUp` false between runs is valid
+- MUST NOT: attach helper identity by guessing at Inspect time only
+- Enforcement: `pkg/service` identity tests + `pkg/gitlab/runners` join/inspect tests
+- Violation: STOP, copy identity in `JoinTargets` from Ownership
+
+## Errors and tests
+
+CLI: `runners gitlab` is the forge-scoped control plane (`service.Manager.Stop`, `gitlabrunner.ListOwnedRunners` / `MatchRunner`). Domain errors use `pkg/errdefs` (`Error()` omits cause argv; `FormatCLI` for stderr).
+
+**CONSTRAINT:** MUST keep quality gates green before claiming a Go change done.
+
+- MUST: `gofmt`, `GOWORK=off go vet ./...`, `GOWORK=off go test -race -count=1 ./...`, `make smoke`
+- MUST: GitLab API tests use `httptest` in `pkg/gitlabrunner`
+- MUST NOT: put host product paths or brand in this module
+- Enforcement: `make ci` locally when touching Go; smoke grep includes `cleanup --help`
+- Violation: STOP, fix, re-run gates
 
 ## Live e2e env
 
@@ -21,9 +94,3 @@ Extend runnerconcierge packages and wizard stages.
 | `E2E_LIVE_ARTIFACT_DIR` | Write inventory JSON traces |
 
 Workflow: `.github/workflows/e2e-live.yml` (`make e2e-live` only).
-
-CLI: bare invoke prints agent guide only; `setup` runs the wizard. `runners gitlab` is the forge-scoped control plane (`service.Manager.Stop`, `gitlabrunner.ListOwnedRunners` / `MatchRunner`). Domain errors use `pkg/errdefs` (`Error()` omits cause argv; `FormatCLI` for stderr).
-
-## Tests
-
-`make test` and `make smoke`. GitLab API: use `httptest` in `pkg/gitlabrunner`.

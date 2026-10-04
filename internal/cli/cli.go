@@ -64,6 +64,7 @@ func printAgentGuide(w io.Writer) {
 	writef(w, "  ai-copilots/README.md")
 	writef(w, "  ai-copilots/BOOTSTRAP.md")
 	writef(w, "  ai-copilots/skills/runnerconcierge-operator/SKILL.md")
+	writef(w, "  ai-copilots/skills/runnerconcierge-developer/SKILL.md")
 	writef(w, "")
 	writef(w, "Read-only")
 	writef(w, "  doctor, verify, status, version, help")

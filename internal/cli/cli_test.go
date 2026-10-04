@@ -20,6 +20,12 @@ func TestRunBareInvokeAgentGuide(t *testing.T) {
 	if !strings.Contains(out.String(), "Documentation for agents") {
 		t.Fatalf("expected agent guide: %q", out.String())
 	}
+	if !strings.Contains(out.String(), "runnerconcierge-operator/SKILL.md") {
+		t.Fatalf("expected operator skill: %q", out.String())
+	}
+	if !strings.Contains(out.String(), "runnerconcierge-developer/SKILL.md") {
+		t.Fatalf("expected developer skill: %q", out.String())
+	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
 	if len(lines) < 10 {
 		t.Fatalf("expected multi-line guide, got %d lines: %q", len(lines), out.String())
