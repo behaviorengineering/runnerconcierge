@@ -9,6 +9,9 @@ import (
 
 	"github.com/behaviorengineering/runnerconcierge/internal/config"
 	"github.com/behaviorengineering/runnerconcierge/pkg/errdefs"
+	"github.com/behaviorengineering/runnerconcierge/pkg/forge"
+	"github.com/behaviorengineering/runnerconcierge/pkg/github"
+	gitlabrunners "github.com/behaviorengineering/runnerconcierge/pkg/gitlab/runners"
 	"github.com/behaviorengineering/runnerconcierge/pkg/preset"
 	"github.com/behaviorengineering/runnerconcierge/pkg/wizard"
 	"github.com/spf13/cobra"
@@ -127,6 +130,36 @@ func dispatchCobra(ctx context.Context, args []string, stdout, stderr io.Writer)
 	}
 	bindWizardFlags(setupCmd, setupFlags, &setupTagList)
 
+	runnersCmd := verbNeedsForge(forge.VerbRunners, "List and act on a forge runner")
+	var runnersCfg gitlabrunners.Config
+	var runnersAction string
+	runnersGitLab := &cobra.Command{
+		Use:   forge.GitLab,
+		Short: "GitLab runners control plane",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			if runnersCfg.Action == "" && runnersAction != "" {
+				act, ok := gitlabrunners.ParseAction(runnersAction)
+				if !ok {
+					return fmt.Errorf("unknown action %q", runnersAction)
+				}
+				runnersCfg.Action = act
+			}
+			return runGitLabRunners(ctx, stdout, stderr, runnersCfg)
+		},
+	}
+	runnersGitLab.Flags().BoolVar(&runnersCfg.JSON, "json", false, "JSON output")
+	runnersGitLab.Flags().StringVar(&runnersCfg.Name, "name", "", "runner name from config.toml")
+	runnersGitLab.Flags().StringVar(&runnersCfg.ServiceName, "service", "", "service unit name")
+	runnersGitLab.Flags().StringVar(&runnersCfg.ConfigPath, "config", "", "runner config.toml path")
+	runnersGitLab.Flags().IntVar(&runnersCfg.GitLabID, "id", 0, "GitLab runner id")
+	runnersGitLab.Flags().BoolVar(&runnersCfg.LocalOnly, "local", false, "machine only; skip GitLab API")
+	runnersGitLab.Flags().StringVar(&runnersAction, "action", "", "inspect|stop|start|repair|remove")
+	runnersGitLab.Flags().BoolVar(&runnersCfg.NonInteractive, "non-interactive", false, "no prompts")
+	runnersGitLab.Flags().BoolVar(&runnersCfg.AllowYes, "yes", false, "skip confirmations")
+	runnersGitLab.Flags().StringVar(&runnersCfg.PAT, "pat", "", "GitLab PAT")
+	runnersGitLab.Flags().StringVar(&runnersCfg.WindowsPassword, "windows-password", "", "Windows service password for repair")
+	runnersCmd.AddCommand(runnersGitLab, githubUnsupportedCmd(forge.VerbRunners))
+
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print release identity",
@@ -143,7 +176,7 @@ func dispatchCobra(ctx context.Context, args []string, stdout, stderr io.Writer)
 		},
 	}
 
-	root.AddCommand(initCmd, doctorCmd, verifyCmd, statusCmd, repairCmd, setupCmd, versionCmd, helpCmd)
+	root.AddCommand(initCmd, doctorCmd, verifyCmd, statusCmd, repairCmd, setupCmd, runnersCmd, versionCmd, helpCmd)
 	root.SetArgs(args)
 	if err := root.Execute(); err != nil {
 		if strings.Contains(err.Error(), "unknown command") {
@@ -172,4 +205,24 @@ func bindWizardFlags(cmd *cobra.Command, o *wizard.Options, tagList *string) {
 	cmd.Flags().StringVar(&o.Executor, "executor", "", "shell or docker")
 	cmd.Flags().StringVar(tagList, "tag-list", "", "comma-separated tags")
 	cmd.Flags().StringVar(&o.ConfigPath, "config", "", "config.yaml path")
+}
+
+func verbNeedsForge(verb, short string) *cobra.Command {
+	return &cobra.Command{
+		Use:   verb,
+		Short: short,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return forge.NeedForge(verb)
+		},
+	}
+}
+
+func githubUnsupportedCmd(verb string) *cobra.Command {
+	return &cobra.Command{
+		Use:   forge.GitHub,
+		Short: "GitHub Actions " + verb + " (not implemented)",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return github.Unsupported(verb)
+		},
+	}
 }

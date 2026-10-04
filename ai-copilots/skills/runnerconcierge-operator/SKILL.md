@@ -6,6 +6,7 @@ Operate the runnerconcierge GitLab runner setup CLI.
 
 - Run `runnerconcierge doctor` before setup on a new host.
 - Run `runnerconcierge status` to inventory existing runners and smells (wrong user, LocalSystem, system config).
+- Use `runnerconcierge runners gitlab` for day-2 stop/start/repair/remove on a picked runner; use `status` for a full dump only.
 - Use login user for Windows service install (never LocalSystem).
 - Pass tags only via GitLab `POST /user/runners`, not `gitlab-runner register`.
 - Store PAT in keyring or env; never commit `glrt` tokens.
@@ -20,6 +21,8 @@ Operate the runnerconcierge GitLab runner setup CLI.
 - `runnerconcierge verify`: one-line service status (scripts)
 - `runnerconcierge status`: full machine inventory and smells (`--json` for agents)
 - `runnerconcierge repair-service --runner-config PATH`: rebind service to login user (confirm or `--yes`; Windows password via prompt, `--windows-password`, or `RUNNERCONCIERGE_WINDOWS_PASSWORD`)
+- `runnerconcierge runners gitlab`: interactive control plane (`--json`, `--name`, `--action`, `--yes`, `--local`, `--id`)
+- MUST NOT invoke `runnerconcierge runners` without `gitlab` or `github` (fail closed with `choose a forge`)
 
 ## E2E live
 

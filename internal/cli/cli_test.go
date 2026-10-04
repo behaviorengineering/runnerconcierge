@@ -38,6 +38,30 @@ func TestRunUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestRunnersNeedForge(t *testing.T) {
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run(context.Background(), []string{"runners"}, &out, &errOut)
+	if code == ExitOK {
+		t.Fatal("expected failure without forge")
+	}
+	if !strings.Contains(errOut.String(), "choose a forge") {
+		t.Fatalf("stderr: %q", errOut.String())
+	}
+}
+
+func TestRunnersGitHubUnsupported(t *testing.T) {
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run(context.Background(), []string{"runners", "github"}, &out, &errOut)
+	if code == ExitOK {
+		t.Fatal("expected unsupported_forge")
+	}
+	if !strings.Contains(errOut.String(), "unsupported_forge") {
+		t.Fatalf("stderr: %q", errOut.String())
+	}
+}
+
 func TestRunVersion(t *testing.T) {
 	var out bytes.Buffer
 	var errOut bytes.Buffer

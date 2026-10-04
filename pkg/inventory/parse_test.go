@@ -18,3 +18,14 @@ func TestParseConfigFile(t *testing.T) {
 		t.Fatalf("unexpected name %q", entries[0].Name)
 	}
 }
+
+func TestParseConfigFile_gitlabID(t *testing.T) {
+	path := filepath.Join("..", "..", "testdata", "inventory", "runner_with_id.toml")
+	entries, err := parseConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].GitLabID != 42 {
+		t.Fatalf("gitlab id: %+v", entries[0])
+	}
+}

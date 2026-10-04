@@ -29,6 +29,7 @@ const (
 	CodeServiceMissing        Code = "service_missing"
 	CodeServiceStopped        Code = "service_stopped"
 	CodeRunnerBinaryMissing   Code = "runner_binary_missing"
+	CodeUnsupportedForge      Code = "unsupported_forge"
 )
 
 // Error is a typed domain error with stable code.

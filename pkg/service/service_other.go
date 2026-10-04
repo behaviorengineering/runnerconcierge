@@ -24,6 +24,10 @@ func (s *stubManager) Start(ctx context.Context, opts StartOpts) error {
 	return fmt.Errorf("service: unsupported platform")
 }
 
+func (s *stubManager) Stop(ctx context.Context, opts StopOpts) error {
+	return errdefs.New("service.Stop", errdefs.CodeUnsupportedOS, "service stop supported on darwin and windows only", nil)
+}
+
 func (s *stubManager) Status(ctx context.Context) (string, error) {
 	return "", fmt.Errorf("service: unsupported platform")
 }

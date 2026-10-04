@@ -20,6 +20,13 @@ type InstallOpts struct {
 // StartOpts configures service start.
 type StartOpts struct {
 	ServiceName string
+	UseBrew     bool
+}
+
+// StopOpts configures service stop.
+type StopOpts struct {
+	ServiceName string
+	UseBrew     bool
 }
 
 // Ownership describes a discovered runner service unit.
@@ -43,6 +50,7 @@ type UninstallOpts struct {
 type Manager interface {
 	Install(ctx context.Context, opts InstallOpts) error
 	Start(ctx context.Context, opts StartOpts) error
+	Stop(ctx context.Context, opts StopOpts) error
 	Status(ctx context.Context) (string, error)
 	Uninstall(ctx context.Context, opts UninstallOpts) error
 	ListOwnership(ctx context.Context) ([]Ownership, error)

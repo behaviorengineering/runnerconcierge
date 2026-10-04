@@ -52,16 +52,67 @@ func (m *darwinManager) Start(ctx context.Context, opts StartOpts) error {
 	if _, ok := ctx.Deadline(); !ok {
 		return errdefs.New("service.Start", errdefs.CodeMissingDeadline, "context missing deadline", nil)
 	}
+	if opts.UseBrew {
+		_, err := m.exec.Run(ctx, "brew", "services", "restart", "gitlab-runner")
+		if err != nil {
+			return errdefs.New("service.Start", errdefs.CodeServiceStart, "brew services restart", err)
+		}
+		return nil
+	}
 	if strings.TrimSpace(opts.ServiceName) != "" {
 		_, err := m.exec.Run(ctx, "gitlab-runner", "start", "--service", strings.TrimSpace(opts.ServiceName))
-		return err
+		if err != nil {
+			return errdefs.New("service.Start", errdefs.CodeServiceStart, "gitlab-runner start", err)
+		}
+		return nil
 	}
 	if _, err := m.exec.LookPath("brew"); err == nil {
 		_, err := m.exec.Run(ctx, "brew", "services", "restart", "gitlab-runner")
-		return err
+		if err != nil {
+			return errdefs.New("service.Start", errdefs.CodeServiceStart, "brew services restart", err)
+		}
+		return nil
 	}
 	_, err := m.exec.Run(ctx, "gitlab-runner", "start")
-	return err
+	if err != nil {
+		return errdefs.New("service.Start", errdefs.CodeServiceStart, "gitlab-runner start", err)
+	}
+	return nil
+}
+
+func (m *darwinManager) Stop(ctx context.Context, opts StopOpts) error {
+	if _, ok := ctx.Deadline(); !ok {
+		return errdefs.New("service.Stop", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	if opts.UseBrew {
+		_, err := m.exec.Run(ctx, "brew", "services", "stop", "gitlab-runner")
+		if err != nil && !darwinStopBenign(err) {
+			return errdefs.New("service.Stop", errdefs.CodeServiceStart, "brew services stop", err)
+		}
+		return nil
+	}
+	svc := strings.TrimSpace(opts.ServiceName)
+	if svc != "" {
+		_, err := m.exec.Run(ctx, "gitlab-runner", "stop", "--service", svc)
+		if err != nil && !darwinStopBenign(err) {
+			return errdefs.New("service.Stop", errdefs.CodeServiceStart, "gitlab-runner stop", err)
+		}
+		return nil
+	}
+	_, err := m.exec.Run(ctx, "gitlab-runner", "stop")
+	if err != nil && !darwinStopBenign(err) {
+		return errdefs.New("service.Stop", errdefs.CodeServiceStart, "gitlab-runner stop", err)
+	}
+	return nil
+}
+
+func darwinStopBenign(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "not installed") || strings.Contains(msg, "not running") ||
+		strings.Contains(msg, "no such file") || strings.Contains(msg, "already stopped")
 }
 
 func (m *darwinManager) Status(ctx context.Context) (string, error) {

@@ -184,13 +184,162 @@ func (c *Client) ListRunners(ctx context.Context, projectID int) ([]RunnerInfo, 
 	}
 	out, err := c.Exec.Run(ctx, "glab", "api", fmt.Sprintf("projects/%d/runners", projectID))
 	if err != nil {
-		return nil, err
+		return nil, errdefs.New("gitlabrunner.ListRunners", errdefs.CodeCreateFailed, glabFailureMessage(err), err)
 	}
 	var list []RunnerInfo
 	if err := json.Unmarshal(out, &list); err != nil {
-		return nil, err
+		return nil, errdefs.New("gitlabrunner.ListRunners", errdefs.CodeCreateFailed, "parse response", err)
 	}
 	return list, nil
+}
+
+// ListOwnedRunners returns runners visible to the authenticated user.
+func (c *Client) ListOwnedRunners(ctx context.Context, pat string) ([]RunnerInfo, error) {
+	if c == nil {
+		return nil, fmt.Errorf("gitlabrunner: client is nil")
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		return nil, errdefs.New(listOwnedRunnersOp, errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	if strings.TrimSpace(pat) != "" {
+		return c.listOwnedHTTP(ctx, pat)
+	}
+	return c.listOwnedGlab(ctx)
+}
+
+func (c *Client) listOwnedGlab(ctx context.Context) ([]RunnerInfo, error) {
+	var all []RunnerInfo
+	for page := 1; page <= 50; page++ {
+		out, err := c.Exec.Run(ctx, "glab", "api", fmt.Sprintf("runners?page=%d&per_page=100", page))
+		if err != nil {
+			return nil, errdefs.New(listOwnedRunnersOp, errdefs.CodeCreateFailed, glabFailureMessage(err), err)
+		}
+		var batch []RunnerInfo
+		if err := json.Unmarshal(out, &batch); err != nil {
+			return nil, errdefs.New(listOwnedRunnersOp, errdefs.CodeCreateFailed, "parse response", err)
+		}
+		if len(batch) == 0 {
+			break
+		}
+		all = append(all, batch...)
+		if len(batch) < 100 {
+			break
+		}
+	}
+	return all, nil
+}
+
+func (c *Client) listOwnedHTTP(ctx context.Context, pat string) ([]RunnerInfo, error) {
+	if c.HTTP == nil {
+		c.HTTP = http.DefaultClient
+	}
+	var all []RunnerInfo
+	for page := 1; page <= 50; page++ {
+		endpoint := fmt.Sprintf("%s/api/v4/runners?page=%d&per_page=100", c.BaseURL, page)
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return nil, errdefs.New(listOwnedRunnersOp, errdefs.CodeCreateFailed, "build request", err)
+		}
+		httpReq.Header.Set("PRIVATE-TOKEN", pat)
+		res, err := c.HTTP.Do(httpReq)
+		if err != nil {
+			return nil, errdefs.New(listOwnedRunnersOp, errdefs.CodeCreateFailed, "HTTP request failed", err)
+		}
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if res.StatusCode == http.StatusForbidden {
+			return nil, errdefs.New(listOwnedRunnersOp, errdefs.CodeAuthScopeInsufficient, "forbidden listing runners", nil)
+		}
+		if res.StatusCode != http.StatusOK {
+			msg := gitlabMessageFromBody(body)
+			if msg == "" {
+				msg = fmt.Sprintf("GitLab returned HTTP %d", res.StatusCode)
+			}
+			return nil, errdefs.New(listOwnedRunnersOp, errdefs.CodeCreateFailed, msg, nil)
+		}
+		var batch []RunnerInfo
+		if err := json.Unmarshal(body, &batch); err != nil {
+			return nil, errdefs.New(listOwnedRunnersOp, errdefs.CodeCreateFailed, "parse response", err)
+		}
+		if len(batch) == 0 {
+			break
+		}
+		all = append(all, batch...)
+		if len(batch) < 100 {
+			break
+		}
+	}
+	return all, nil
+}
+
+// DeleteRunner removes a GitLab runner by id (HTTP PAT when set, else glab).
+func (c *Client) DeleteRunner(ctx context.Context, runnerID int, pat string) error {
+	if c == nil {
+		return errdefs.New(deleteRunnerOp, errdefs.CodeCreateFailed, "client is nil", nil)
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		return errdefs.New(deleteRunnerOp, errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	if runnerID <= 0 {
+		return errdefs.New(deleteRunnerOp, errdefs.CodeInvalidScope, "runner id is required", nil)
+	}
+	if strings.TrimSpace(pat) != "" {
+		return c.deleteHTTP(ctx, runnerID, pat)
+	}
+	return c.deleteGlab(ctx, runnerID)
+}
+
+func (c *Client) deleteGlab(ctx context.Context, runnerID int) error {
+	_, err := c.Exec.Run(ctx, "glab", "api", "--method", "DELETE", fmt.Sprintf("runners/%d", runnerID))
+	if err != nil {
+		msg := glabFailureMessage(err)
+		if strings.Contains(strings.ToLower(msg), "forbidden") || strings.Contains(err.Error(), "HTTP 403") {
+			return errdefs.New(deleteRunnerOp, errdefs.CodeAuthScopeInsufficient, "forbidden; need permission to delete runner", err)
+		}
+		return newDeleteErr(msg, err)
+	}
+	return nil
+}
+
+func (c *Client) deleteHTTP(ctx context.Context, runnerID int, pat string) error {
+	if c.HTTP == nil {
+		c.HTTP = http.DefaultClient
+	}
+	endpoint := fmt.Sprintf("%s/api/v4/runners/%d", c.BaseURL, runnerID)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return newDeleteErr("build request", err)
+	}
+	httpReq.Header.Set("PRIVATE-TOKEN", pat)
+	res, err := c.HTTP.Do(httpReq)
+	if err != nil {
+		return newDeleteErr("HTTP request failed", err)
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(res.Body)
+	if res.StatusCode == http.StatusForbidden {
+		return errdefs.New(deleteRunnerOp, errdefs.CodeAuthScopeInsufficient, "forbidden; need permission to delete runner", nil)
+	}
+	if res.StatusCode != http.StatusNoContent && res.StatusCode != http.StatusOK {
+		msg := gitlabMessageFromBody(body)
+		if msg == "" {
+			msg = fmt.Sprintf("GitLab returned HTTP %d", res.StatusCode)
+		}
+		return newDeleteErr(msg, nil)
+	}
+	return nil
+}
+
+// Unregister runs gitlab-runner unregister with built argv.
+func (c *Client) Unregister(ctx context.Context, runnerBin string, args []string) error {
+	if _, ok := ctx.Deadline(); !ok {
+		return errdefs.New("Unregister", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	_, err := c.Exec.Run(ctx, runnerBin, args...)
+	if err != nil {
+		return errdefs.New("Unregister", errdefs.CodeRegisterFailed, "unregister failed", err)
+	}
+	return nil
 }
 
 // ResolveProjectID looks up numeric project id from path.

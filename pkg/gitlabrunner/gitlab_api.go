@@ -60,8 +60,25 @@ func glabFailureMessage(err error) string {
 	if strings.Contains(s, "HTTP 400") {
 		return "GitLab rejected the runner create request"
 	}
+	if strings.Contains(strings.ToLower(s), "project not found") {
+		return "GitLab project not found"
+	}
+	if strings.Contains(strings.ToLower(s), "group not found") {
+		return "GitLab group not found"
+	}
+	if strings.Contains(s, "HTTP 403") {
+		return "GitLab forbidden"
+	}
 	return "GitLab API request failed"
 }
+
+const deleteRunnerOp = "gitlabrunner.DeleteRunner"
+
+func newDeleteErr(msg string, err error) *errdefs.Error {
+	return errdefs.New(deleteRunnerOp, errdefs.CodeCreateFailed, msg, err)
+}
+
+const listOwnedRunnersOp = "gitlabrunner.ListOwnedRunners"
 
 // ValidateCreateRunnerRequest ensures runner_type scope fields are set before POST.
 func ValidateCreateRunnerRequest(req CreateRunnerRequest) error {

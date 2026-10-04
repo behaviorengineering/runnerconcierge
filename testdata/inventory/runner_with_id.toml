@@ -1,0 +1,8 @@
+concurrent = 1
+
+[[runners]]
+  id = 42
+  name = "home-a"
+  url = "https://gitlab.com/"
+  token = "glrt-SECRETTOKEN123"
+  executor = "shell"

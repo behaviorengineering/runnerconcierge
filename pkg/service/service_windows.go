@@ -76,12 +76,41 @@ func (m *windowsManager) Install(ctx context.Context, opts InstallOpts) error {
 }
 
 func (m *windowsManager) Start(ctx context.Context, opts StartOpts) error {
+	if _, ok := ctx.Deadline(); !ok {
+		return errdefs.New("service.Start", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
 	args := []string{"start"}
 	if strings.TrimSpace(opts.ServiceName) != "" {
 		args = append(args, "--service", strings.TrimSpace(opts.ServiceName))
 	}
 	_, err := m.exec.Run(ctx, "gitlab-runner", args...)
-	return err
+	if err != nil {
+		return errdefs.New("service.Start", errdefs.CodeServiceStart, "gitlab-runner start", err)
+	}
+	return nil
+}
+
+func (m *windowsManager) Stop(ctx context.Context, opts StopOpts) error {
+	if _, ok := ctx.Deadline(); !ok {
+		return errdefs.New("service.Stop", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	args := []string{"stop"}
+	if strings.TrimSpace(opts.ServiceName) != "" {
+		args = append(args, "--service", strings.TrimSpace(opts.ServiceName))
+	}
+	_, err := m.exec.Run(ctx, "gitlab-runner", args...)
+	if err != nil && !windowsStopBenign(err) {
+		return errdefs.New("service.Stop", errdefs.CodeServiceStart, "gitlab-runner stop", err)
+	}
+	return nil
+}
+
+func windowsStopBenign(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "not installed") || strings.Contains(msg, "not running")
 }
 
 func (m *windowsManager) Status(ctx context.Context) (string, error) {

@@ -21,6 +21,9 @@ Day-2 inventory (manual installs, wrong service user):
 ```bash
 ./bin/runnerconcierge status
 ./bin/runnerconcierge repair-service --runner-config ~/.gitlab-runner/config.toml
+./bin/runnerconcierge runners gitlab
+./bin/runnerconcierge runners gitlab --json
+./bin/runnerconcierge runners gitlab --name "$(hostname)" --action remove --yes
 ```
 
 Live E2E (maintainers; macOS/Windows only; not part of Ubuntu PR CI):
