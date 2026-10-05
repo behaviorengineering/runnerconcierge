@@ -72,7 +72,7 @@ Read-only (safe to run first):
 Changes this machine or GitLab:
 
 - `runnerconcierge init`: seed user `config.yaml`
-- `runnerconcierge runners gitlab setup`: wizard (`--repo group/project` for automation; interactive TTY picks project from GitLab membership and git remote, plus tags and executor). On macOS and Windows, setup also installs the `runnerconcierge-docker-cleanup` schedule (all executor types; safe when Docker is unused)
+- `runnerconcierge runners gitlab setup`: wizard (`--repo group/project` or `--group my-group` for automation; interactive TTY asks project vs group scope, then lists membership). On macOS and Windows, setup also installs the `runnerconcierge-docker-cleanup` schedule (all executor types; safe when Docker is unused)
 - `runnerconcierge repair-service --runner-config PATH`: rebind the **gitlab-runner** service to the login user (`--yes`; Windows password via prompt, `--windows-password`, or `RUNNERCONCIERGE_WINDOWS_PASSWORD`)
 - `runnerconcierge cleanup`: one-shot prune of exited `runner-*` containers older than `--min-age` (default 1h) and dangling `runner-*` volumes. Docker down → skip, exit 0
 - `runnerconcierge cleanup install --yes`: register the periodic helper (macOS LaunchAgent, Windows Task Scheduler). `--yes` replaces legacy helpers whose command basename is `gitlab-runner-docker-cleanup`
@@ -125,6 +125,22 @@ PROHIBITED:
 - MUST NOT: commit PAT or `glrt` tokens
 - Enforcement: `status` findings for LocalSystem / wrong user; secrets stay in keyring or env
 - Violation: STOP, `repair-service`, do not leave LocalSystem running jobs
+
+### Runner token (glrt) and checkpoint resume
+
+Interactive `runners gitlab setup` runs an **identity** step **before** doctor and tool install: hydrate empty flags from `state.json` (tags, executor, `repo_path`, `group_path`), then **runner tag**, then **glrt** (hidden). Leave glrt empty to create a new runner via GitLab API. Store glrt in the OS keyring (service `runnerconcierge`) **before** register. If checkpoint has `runner_id` but keyring miss, setup **reprompts** for glrt before register (TTY only).
+
+| Account / env | When |
+|---------------|------|
+| `GITLAB_RUNNER_TOKEN_<tag>` | Primary: glrt for canonical tag (first `--tag-list` or interactive tag prompt) |
+| `GITLAB_RUNNER_TOKEN_<id>` | Also written after `POST /user/runners` for resume by runner id |
+| `GITLAB_RUNNER_TOKEN` | Legacy pending slot (read-only fallback) |
+| `GITLAB_TOKEN` | PAT for create_runner (optional; glab auth may suffice) |
+
+- MUST: skip the glrt prompt when `--token`, env, or keyring already has the token for that tag (save-and-forget)
+- MUST: resume failed setup using checkpoint `runner_id` plus keyring glrt; `state.json` stays redacted (no tokens)
+- MUST NOT: echo or log glrt values
+- `--fresh` archives checkpoint only; it does not delete keyring entries
 
 ## E2E live
 

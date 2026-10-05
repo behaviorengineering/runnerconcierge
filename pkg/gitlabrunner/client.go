@@ -398,7 +398,11 @@ func (c *Client) Register(ctx context.Context, runnerBin string, args []string) 
 	full := append([]string{}, args...)
 	_, err := c.Exec.Run(ctx, runnerBin, full...)
 	if err != nil {
-		return errdefs.New("Register", errdefs.CodeRegisterFailed, "register failed", err)
+		msg := "register failed"
+		if hint := childErrorSummary(err); hint != "" {
+			msg += ": " + hint
+		}
+		return errdefs.New("Register", errdefs.CodeRegisterFailed, msg, err)
 	}
 	return nil
 }

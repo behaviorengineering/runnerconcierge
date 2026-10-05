@@ -239,11 +239,12 @@ func bindWizardFlags(cmd *cobra.Command, o *wizard.Options, tagList *string) {
 	cmd.Flags().BoolVar(&o.Resume, "resume", false, "resume checkpoint")
 	cmd.Flags().BoolVar(&o.Fresh, "fresh", false, "discard checkpoint")
 	cmd.Flags().BoolVar(&o.AllowInstall, "yes", false, "allow installs")
-	cmd.Flags().StringVar(&o.RunnerToken, "token", "", "glrt runner token")
+	cmd.Flags().StringVar(&o.RunnerToken, "token", "", "glrt runner token (stored in OS keyring when used)")
 	cmd.Flags().StringVar(&o.PAT, "pat", "", "gitlab PAT with create_runner")
-	cmd.Flags().StringVar(&o.ProjectPath, "repo", "", "group/project path")
+	cmd.Flags().StringVar(&o.ProjectPath, "repo", "", "group/project path for project runners")
+	cmd.Flags().StringVar(&o.GroupPath, "group", "", "group path for group runners")
 	cmd.Flags().StringVar(&o.Executor, "executor", "", "shell or docker")
-	cmd.Flags().StringVar(tagList, "tag-list", "", "comma-separated tags")
+	cmd.Flags().StringVar(tagList, "tag-list", "", "comma-separated tags (first tag names the glrt keyring entry GITLAB_RUNNER_TOKEN_<tag>)")
 	cmd.Flags().StringVar(&o.ConfigPath, "config", "", "config.yaml path")
 }
 

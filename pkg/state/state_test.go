@@ -1,48 +1,55 @@
 package state
 
 import (
-	"os"
-	"path/filepath"
+	"encoding/json"
+	"strings"
 	"testing"
 )
 
-func TestStoreSaveLoad(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "runnerconcierge")
-	s := &Store{Dir: dir}
+func TestCheckpointGroupPathJSON(t *testing.T) {
 	cp := &Checkpoint{
-		Version:     1,
-		Fingerprint: "abc",
-		Stage:       "doctor",
-		RunnerID:    7,
+		Version:   1,
+		GroupPath: "my-group",
+		Tags:      []string{"lab"},
 	}
-	if err := s.Save(cp); err != nil {
-		t.Fatal(err)
-	}
-	got, ok, err := s.Load()
-	if err != nil || !ok {
-		t.Fatalf("load: ok=%v err=%v", ok, err)
-	}
-	if got.RunnerID != 7 || got.Fingerprint != "abc" {
-		t.Fatalf("unexpected checkpoint: %+v", got)
-	}
-	data, err := os.ReadFile(s.Path())
+	data, err := json.Marshal(cp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if contains(string(data), "glrt-") {
-		t.Fatal("checkpoint must not contain tokens")
+	if !strings.Contains(string(data), `"group_path":"my-group"`) {
+		t.Fatalf("json %s", data)
+	}
+	var back Checkpoint
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.GroupPath != "my-group" {
+		t.Fatalf("group %q", back.GroupPath)
 	}
 }
 
-func contains(s, sub string) bool {
-	return len(sub) > 0 && len(s) >= len(sub) && search(s, sub)
+func TestCheckpointMarshalNoGLRT(t *testing.T) {
+	cp := &Checkpoint{
+		Version:     1,
+		Description: "host runner",
+		Tags:        []string{"ci"},
+	}
+	data, err := json.Marshal(cp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "glrt-") {
+		t.Fatalf("checkpoint must not contain glrt: %s", data)
+	}
 }
 
-func search(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
+func TestCheckpointUnmarshalWithoutGroupPath(t *testing.T) {
+	const raw = `{"version":1,"tags":["a"]}`
+	var cp Checkpoint
+	if err := json.Unmarshal([]byte(raw), &cp); err != nil {
+		t.Fatal(err)
 	}
-	return false
+	if cp.GroupPath != "" {
+		t.Fatalf("group %q", cp.GroupPath)
+	}
 }

@@ -11,7 +11,7 @@ import (
 // Prompter collects interactive answers.
 type Prompter interface {
 	Confirm(ctx context.Context, title string) (bool, error)
-	Input(ctx context.Context, title, placeholder string) (string, error)
+	Input(ctx context.Context, title, placeholder, value string) (string, error)
 	Password(ctx context.Context, title string) (string, error)
 	Select(ctx context.Context, title string, options []string) (int, error)
 }
@@ -42,8 +42,8 @@ func (h *Huh) Confirm(ctx context.Context, title string) (bool, error) {
 }
 
 // Input asks for a single line.
-func (h *Huh) Input(ctx context.Context, title, placeholder string) (string, error) {
-	var val string
+func (h *Huh) Input(ctx context.Context, title, placeholder, value string) (string, error) {
+	val := value
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().Title(title).Placeholder(placeholder).Value(&val),
@@ -100,7 +100,7 @@ func (n *NonInteractive) Confirm(ctx context.Context, title string) (bool, error
 	return false, fmt.Errorf("prompt: non-interactive mode (%s)", title)
 }
 
-func (n *NonInteractive) Input(ctx context.Context, title, placeholder string) (string, error) {
+func (n *NonInteractive) Input(ctx context.Context, title, placeholder, value string) (string, error) {
 	return "", fmt.Errorf("prompt: non-interactive mode (%s)", title)
 }
 

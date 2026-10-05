@@ -21,7 +21,7 @@ type RegisterArgs struct {
 
 // BuildRegisterArgv returns non-interactive register arguments.
 func BuildRegisterArgv(in RegisterArgs) ([]string, error) {
-	url := strings.TrimSpace(in.URL)
+	url := normalizeInstanceURL(strings.TrimSpace(in.URL))
 	if url == "" {
 		return nil, fmt.Errorf("gitlabrunner: url is required")
 	}
@@ -65,4 +65,15 @@ func defaultShell() string {
 		return "pwsh"
 	}
 	return "bash"
+}
+
+func normalizeInstanceURL(u string) string {
+	u = strings.TrimSpace(u)
+	if u == "" {
+		return ""
+	}
+	if !strings.HasSuffix(u, "/") {
+		u += "/"
+	}
+	return u
 }

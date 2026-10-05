@@ -89,6 +89,8 @@ PROHIBITED:
 
 CLI: `runners gitlab list` is the forge-scoped control plane (`service.Manager.Stop`, `gitlabrunner.ListOwnedRunners` / `MatchRunner`); `runners gitlab setup` runs the wizard. Domain errors use `pkg/errdefs` (`Error()` omits cause argv; `FormatCLI` for stderr).
 
+**Checkpoint vs secrets:** `pkg/state` checkpoint JSON MUST stay redacted (no glrt). Hydrate non-secret fields via `applyCheckpointToOpts`; identity stage saves `stage=identity` before doctor. glrt: `internal/config` keyring (`GITLAB_RUNNER_TOKEN_<tag>`, `GITLAB_RUNNER_TOKEN_<id>`); `ensureGLRTInteractive` reprompts on resume miss. Tests use `NewMemKeyring()`.
+
 **CONSTRAINT:** MUST keep quality gates green before claiming a Go change done.
 
 - MUST: `gofmt`, `GOWORK=off go vet ./...`, `GOWORK=off go test -race -count=1 ./...`, `make smoke`

@@ -60,6 +60,8 @@ runnerconcierge runners gitlab setup --non-interactive --yes \
   --repo group/project --tag-list my-tag --pat "$GITLAB_TOKEN"
 ```
 
+Resume after a failed register: `state.json` keeps runner id, tags, executor, and project/group paths (no glrt). Setup hydrates those into prompts (flags still win), asks tag and glrt first, then doctor/tools. The glrt lives in the keyring (`GITLAB_RUNNER_TOKEN_<tag>` and `GITLAB_RUNNER_TOKEN_<id>` after create). If id is set but keyring is empty, interactive setup asks for glrt again before register. Non-interactive: pass `--token` or env. Pre-register, seed `GITLAB_RUNNER_TOKEN_<tag>` matching the first `--tag-list` value.
+
 ## Forge setup
 
 See [docs/FORGE.md](docs/FORGE.md) (prepare-go-forge, branch protection, secret scan, required checks).

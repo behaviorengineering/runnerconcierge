@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/behaviorengineering/gitvalet/pkg/gitexec"
+	"github.com/behaviorengineering/operatorconfig/pkg/operatorconfig"
 	"github.com/behaviorengineering/runnerconcierge/internal/config"
 	"github.com/behaviorengineering/runnerconcierge/pkg/cleanup"
 	"github.com/behaviorengineering/runnerconcierge/pkg/detect"
@@ -32,7 +33,10 @@ type Options struct {
 	AllowInstall    bool
 	RunnerToken     string
 	PAT             string
+	Keyring         operatorconfig.Keyring // nil → OS keyring
 	ProjectPath     string
+	GroupPath       string
+	RunnerType      string
 	Executor        string
 	TagList         []string
 	RunUntagged     bool
@@ -100,7 +104,11 @@ func (r *Runner) Run(ctx context.Context) error {
 		return err
 	}
 	if found && !r.opts.Fresh && !r.opts.Resume && !r.opts.NonInteractive {
-		msg := fmt.Sprintf("Incomplete setup at stage %q (runner id %d). Resume?", cp.Stage, cp.RunnerID)
+		tagHint := ""
+		if cp != nil && len(cp.Tags) > 0 {
+			tagHint = fmt.Sprintf(", tag %q", strings.TrimSpace(cp.Tags[0]))
+		}
+		msg := fmt.Sprintf("Incomplete setup at stage %q (runner id %d%s). Resume?", cp.Stage, cp.RunnerID, tagHint)
 		ok, err := pr.Confirm(ctx, msg)
 		if err != nil {
 			return err
@@ -119,6 +127,26 @@ func (r *Runner) Run(ctx context.Context) error {
 			GitLabURL:   r.gitlabURL(),
 		}
 	}
+
+	if found && !r.opts.Fresh {
+		applyCheckpointToOpts(&r.opts, cp)
+		r.outResumeSummary(cp)
+	}
+
+	if err := r.promptCanonicalTag(ctx, pr, cp); err != nil {
+		return err
+	}
+	if err := r.promptCredentials(ctx, pr, cp.RunnerID, cp); err != nil {
+		return err
+	}
+	if len(r.opts.TagList) > 0 {
+		cp.Tags = append([]string(nil), r.opts.TagList...)
+	}
+	cp.Stage = "identity"
+	if err := r.saveCheckpoint(cp); err != nil {
+		return err
+	}
+
 	if runtime.GOOS == "windows" && r.opts.WindowsPassword == "" && !r.opts.NonInteractive {
 		pw, err := pr.Password(ctx, "Windows service account password (login user, not shown again)")
 		if err != nil {
@@ -156,31 +184,20 @@ func (r *Runner) Run(ctx context.Context) error {
 
 	cfgPath, workDir := r.paths()
 	cp.ConfigPath = cfgPath
-	_ = r.store.Save(cp)
-
-	token := strings.TrimSpace(r.opts.RunnerToken)
-	runnerID := cp.RunnerID
-	if token == "" && runnerID == 0 {
-		client := gitlabrunner.NewClient(r.gitlabURL(), r.exec, nil)
-		req, err := r.createRequest(ctx)
-		if err != nil {
-			return err
-		}
-		pat := strings.TrimSpace(r.opts.PAT)
-		runnerID, token, err = client.CreateRunner(ctx, req, pat)
-		if err != nil {
-			return errdefs.New("setup", errdefs.CodeOf(err), "could not create GitLab runner", err)
-		}
-		cp.RunnerID = runnerID
-		cp.Description = req.Description
-		cp.Tags = req.TagList
-		cp.Executor = r.executor()
-		if err := r.store.Save(cp); err != nil {
-			return errdefs.New("setup", errdefs.CodeProcessConflict, "could not save checkpoint", err)
-		}
+	if err := r.saveCheckpoint(cp); err != nil {
+		return err
 	}
-	if token == "" && runnerID > 0 {
-		return fmt.Errorf("wizard: runner %d exists but glrt token missing; re-create in GitLab UI or pass --token", runnerID)
+
+	if err := r.promptSetupOptions(ctx, pr, cp); err != nil {
+		return err
+	}
+	if err := r.ensureGLRTInteractive(ctx, pr, cp); err != nil {
+		return err
+	}
+
+	token, runnerID, err := r.resolveRegisterToken(ctx, cp)
+	if err != nil {
+		return err
 	}
 
 	regArgs, err := gitlabrunner.BuildRegisterArgv(gitlabrunner.RegisterArgs{
@@ -190,6 +207,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		Executor:         r.executor(),
 		ConfigPath:       cfgPath,
 		WorkingDirectory: workDir,
+		DockerImage:      r.dockerImage(),
 	})
 	if err != nil {
 		return err
@@ -241,11 +259,44 @@ func (r *Runner) Run(ctx context.Context) error {
 	return r.store.Save(cp)
 }
 
+func (r *Runner) outResumeSummary(cp *state.Checkpoint) {
+	if r == nil || cp == nil {
+		return
+	}
+	parts := []string{fmt.Sprintf("resume stage=%q", cp.Stage)}
+	if cp.RunnerID > 0 {
+		parts = append(parts, fmt.Sprintf("runner_id=%d", cp.RunnerID))
+	}
+	if tag := canonicalTag(r.opts, cp); tag != "" {
+		parts = append(parts, fmt.Sprintf("tag=%q", tag))
+	}
+	if e := strings.TrimSpace(cp.Executor); e != "" {
+		parts = append(parts, fmt.Sprintf("executor=%q", e))
+	}
+	if p := strings.TrimSpace(cp.RepoPath); p != "" {
+		parts = append(parts, fmt.Sprintf("project=%q", p))
+	}
+	if g := strings.TrimSpace(cp.GroupPath); g != "" {
+		parts = append(parts, fmt.Sprintf("group=%q", g))
+	}
+	r.out("setup: " + strings.Join(parts, " "))
+}
+
 func (r *Runner) gitlabURL() string {
 	if r.preset.GitLabURL != "" {
 		return r.preset.GitLabURL
 	}
 	return r.cfg.GitLabURL
+}
+
+func (r *Runner) dockerImage() string {
+	if strings.TrimSpace(r.preset.DockerImage) != "" {
+		return strings.TrimSpace(r.preset.DockerImage)
+	}
+	if r.executor() != "docker" {
+		return ""
+	}
+	return "docker:24"
 }
 
 func (r *Runner) executor() string {
@@ -265,26 +316,63 @@ func (r *Runner) createRequest(ctx context.Context) (gitlabrunner.CreateRunnerRe
 	}
 	runUntagged := r.opts.RunUntagged || r.preset.RunUntagged
 	desc := strings.TrimSpace(r.cfg.DescriptionPrefix + " " + hostname())
-	projectPath := strings.TrimSpace(r.opts.ProjectPath)
-	if projectPath == "" {
-		projectPath = strings.TrimSpace(r.preset.RepoPath)
-	}
+	client := gitlabrunner.NewClient(r.gitlabURL(), r.exec, nil)
+
 	req := gitlabrunner.CreateRunnerRequest{
-		RunnerType:  "project_type",
 		Description: desc,
 		TagList:     tags,
 		RunUntagged: runUntagged,
 	}
-	if projectPath == "" {
-		return req, errdefs.New("setup", errdefs.CodeInvalidScope, "GitLab project path is required (--repo)", nil)
+
+	switch r.effectiveRunnerType() {
+	case "group_type":
+		req.RunnerType = "group_type"
+		if r.preset.GroupID > 0 {
+			req.GroupID = r.preset.GroupID
+			return req, nil
+		}
+		groupPath := strings.TrimSpace(r.opts.GroupPath)
+		if groupPath == "" {
+			return req, errdefs.New("setup", errdefs.CodeInvalidScope, "GitLab group path is required (--group)", nil)
+		}
+		id, err := client.ResolveGroupID(ctx, groupPath)
+		if err != nil {
+			return req, errdefs.New("setup", errdefs.CodeOf(err), "could not resolve GitLab group id", err)
+		}
+		req.GroupID = id
+		return req, nil
+	default:
+		req.RunnerType = "project_type"
+		projectPath := strings.TrimSpace(r.opts.ProjectPath)
+		if projectPath == "" {
+			projectPath = strings.TrimSpace(r.preset.RepoPath)
+		}
+		if projectPath == "" {
+			return req, errdefs.New("setup", errdefs.CodeInvalidScope, "GitLab project path is required (--repo)", nil)
+		}
+		id, err := client.ResolveProjectID(ctx, projectPath)
+		if err != nil {
+			return req, errdefs.New("setup", errdefs.CodeOf(err), "could not resolve GitLab project id", err)
+		}
+		req.ProjectID = id
+		return req, nil
 	}
-	client := gitlabrunner.NewClient(r.gitlabURL(), r.exec, nil)
-	id, err := client.ResolveProjectID(ctx, projectPath)
-	if err != nil {
-		return req, errdefs.New("setup", errdefs.CodeOf(err), "could not resolve GitLab project id", err)
+}
+
+func (r *Runner) effectiveRunnerType() string {
+	if t := strings.TrimSpace(r.opts.RunnerType); t != "" {
+		return t
 	}
-	req.ProjectID = id
-	return req, nil
+	if t := strings.TrimSpace(r.preset.RunnerType); t != "" {
+		return t
+	}
+	if strings.TrimSpace(r.opts.GroupPath) != "" || r.preset.GroupID > 0 {
+		return "group_type"
+	}
+	if strings.TrimSpace(r.opts.ProjectPath) != "" || strings.TrimSpace(r.preset.RepoPath) != "" {
+		return "project_type"
+	}
+	return ""
 }
 
 func (r *Runner) runnerName() string {
