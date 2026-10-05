@@ -40,6 +40,7 @@ type RunnerEntry struct {
 	Name     string
 	URL      string
 	Executor string
+	GitLabID int
 }
 
 // Finding is a typed smell.

@@ -129,20 +129,21 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		BinaryPath:       bin,
 		ConfigPath:       cfgPath,
 		WorkingDirectory: workDir,
+		ServiceName:      targetName,
 		WindowsUser:      winUser,
 		WindowsPassword:  opts.WindowsPassword,
 		UseBrewServices:  useBrew || opts.UseBrewServices,
 	}); err != nil {
 		return nil, fmt.Errorf("repair: install failed (backup at %s): %w", backup, err)
 	}
-	if err := svcMgr.Start(ctx); err != nil {
+	if err := svcMgr.Start(ctx, service.StartOpts{ServiceName: targetName}); err != nil {
 		return nil, fmt.Errorf("repair: start failed (backup at %s): %w", backup, err)
 	}
 	after, err := inventory.Run(ctx, inventory.Options{Exec: opts.Exec, LoginUser: login, ExtraConfigPaths: []string{cfgPath}})
 	if err != nil {
 		return nil, err
 	}
-	if inventory.HasBlocking(after) {
+	if inventory.HasBlockingForTarget(after, cfgPath, targetName) {
 		return &Result{Before: before, After: after, BackupPath: backup}, fmt.Errorf("repair: blocking findings remain after repair")
 	}
 	return &Result{Before: before, After: after, BackupPath: backup}, nil

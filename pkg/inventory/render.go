@@ -85,6 +85,27 @@ func HasBlocking(rep *Report) bool {
 	return false
 }
 
+// HasBlockingForTarget reports blocking findings scoped to one config path and/or service name.
+func HasBlockingForTarget(rep *Report, configPath, serviceName string) bool {
+	if rep == nil {
+		return false
+	}
+	configPath = strings.TrimSpace(configPath)
+	serviceName = strings.TrimSpace(serviceName)
+	for _, f := range rep.Findings {
+		if !f.Block {
+			continue
+		}
+		if configPath != "" && f.ConfigPath == configPath {
+			return true
+		}
+		if serviceName != "" && f.Service == serviceName {
+			return true
+		}
+	}
+	return false
+}
+
 // FindingsForConfig returns findings tied to a config path.
 func FindingsForConfig(rep *Report, configPath string) []Finding {
 	if rep == nil {

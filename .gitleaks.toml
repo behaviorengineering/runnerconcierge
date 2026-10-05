@@ -1,0 +1,8 @@
+title = "runnerconcierge"
+
+[allowlist]
+description = "Synthetic runner tokens in e2e fixtures and inventory testdata"
+paths = [
+  '''internal/e2elive/fixture/''',
+  '''testdata/''',
+]

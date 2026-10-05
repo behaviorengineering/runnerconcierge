@@ -11,9 +11,22 @@ type InstallOpts struct {
 	BinaryPath       string
 	ConfigPath       string
 	WorkingDirectory string
+	ServiceName      string
 	WindowsUser      string
 	WindowsPassword  string // memory only; never persisted
 	UseBrewServices  bool
+}
+
+// StartOpts configures service start.
+type StartOpts struct {
+	ServiceName string
+	UseBrew     bool
+}
+
+// StopOpts configures service stop.
+type StopOpts struct {
+	ServiceName string
+	UseBrew     bool
 }
 
 // Ownership describes a discovered runner service unit.
@@ -23,6 +36,11 @@ type Ownership struct {
 	LogonUser   string
 	ConfigPath  string
 	Kind        string
+	UnitPath    string
+	Command     string
+	MatchReason string
+	Role        string
+	ProcessUp   bool
 }
 
 // UninstallOpts configures service removal.
@@ -36,7 +54,8 @@ type UninstallOpts struct {
 // Manager installs and starts the runner service.
 type Manager interface {
 	Install(ctx context.Context, opts InstallOpts) error
-	Start(ctx context.Context) error
+	Start(ctx context.Context, opts StartOpts) error
+	Stop(ctx context.Context, opts StopOpts) error
 	Status(ctx context.Context) (string, error)
 	Uninstall(ctx context.Context, opts UninstallOpts) error
 	ListOwnership(ctx context.Context) ([]Ownership, error)

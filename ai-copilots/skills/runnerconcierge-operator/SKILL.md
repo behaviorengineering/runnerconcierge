@@ -1,27 +1,164 @@
+---
+name: runnerconcierge-operator
+description: >-
+  Operate runnerconcierge: doctor, status, repair-service, cleanup, and
+  runners gitlab list/setup on macOS and Windows. Use for local GitLab runner inventory,
+  docker leftover prune, and day-2 stop/start/repair/remove. Not for GitHub Actions.
+---
+
 # runnerconcierge-operator
 
-Operate the runnerconcierge GitLab runner setup CLI.
+**Moral:** Inspect the machine, then act with an explicit verb. Bare `runnerconcierge` prints the agent guide and MUST NOT run setup.
 
-## MUST
+## Start every task
 
-- Run `runnerconcierge doctor` before setup on a new host.
-- Run `runnerconcierge status` to inventory existing runners and smells (wrong user, LocalSystem, system config).
-- Use login user for Windows service install (never LocalSystem).
-- Pass tags only via GitLab `POST /user/runners`, not `gitlab-runner register`.
-- Store PAT in keyring or env; never commit `glrt` tokens.
-- Re-run `make e2e-live` after `gitlab-runner` upgrades or changes under `pkg/service`, `pkg/inventory`, or `pkg/repair`.
+1. Follow [AGENTS.md](../../../AGENTS.md) wire-if-missing (BOOTSTRAP wire mode when IDE discovery links are absent), then confirm this checkout is `github.com/behaviorengineering/runnerconcierge` (`git rev-parse --show-toplevel`).
+2. Build when needed: `make build`.
+3. Prefer inspect commands before anything that stops, removes, or rebinds a unit.
+
+BOOTSTRAP wire is for IDE discovery links; it is not a substitute for `setup` when installing runners.
+
+## Inspect then act
+
+**CONSTRAINT:** MUST inspect before a destructive or service-changing command.
+
+- MUST: run `status` (full dump) or `runners gitlab list --json` / interactive Inspect before `repair-service`, `runners gitlab list --action stop|start|repair|remove`, `cleanup uninstall`, or `cleanup install --yes`
+- MUST NOT: skip inspect because a picker label looks like a registered runner
+- Enforcement: the last inspect output is in the thread (or `--json` was run) before the act
+- Violation: STOP, run inspect, then continue
+
+CORRECT:
+```text
+runnerconcierge status
+runnerconcierge runners gitlab list --json
+runnerconcierge cleanup
+runnerconcierge cleanup install --yes
+```
+
+PROHIBITED:
+```text
+runnerconcierge runners gitlab list --action remove --yes
+# no inspect; brew gitlab-runner treated as a fourth GitLab registration
+```
+
+## Units on this machine
+
+`runners gitlab list` lists **registered** `[[runners]]` from `config.toml` plus leftover **service-only** units.
+
+| Kind | Typical row | What it does |
+|------|-------------|--------------|
+| Registered runner | name from TOML, linked service or not | GitLab job identity |
+| Supervisor | brew/windows `gitlab-runner` | Long-lived `gitlab-runner run`; one process serves every `[[runners]]` in that config. **Not** a separate `runners gitlab` picker row; it appears on registered runner rows (start/stop/remove last runner). Use `repair-service`, `verify`, or `brew services` for the unit alone. |
+| Helper | `runnerconcierge-docker-cleanup` (or a legacy script LaunchAgent) | Periodic docker leftover prune; not a GitLab registration |
+| Fixture | `runnerconcierge-e2e-*` | Live e2e only |
+
+**CONSTRAINT:** MUST treat a brew or Windows `gitlab-runner` supervisor as the CI engine, not as an extra GitLab runner name.
+
+- MUST NOT: stop or remove the supervisor to "clean up unused runners" when registrations still need jobs
+- MUST: use Inspect Role / Why listed / Command / Process up for service-only rows
+- Enforcement: Role is `supervisor` or `helper` before stop/remove
+- Violation: STOP, Inspect, then ask the operator
+
+`Process up` on an interval helper is often **no** between ticks. That is expected.
 
 ## Commands
 
-- `runnerconcierge` or `runnerconcierge setup`: wizard
-- `runnerconcierge init`: seed config
-- `runnerconcierge doctor`: setup preflight
-- `runnerconcierge verify`: one-line service status (scripts)
-- `runnerconcierge status`: full machine inventory and smells (`--json` for agents)
-- `runnerconcierge repair-service --runner-config PATH`: rebind service to login user (confirm or `--yes`; Windows password via prompt, `--windows-password`, or `RUNNERCONCIERGE_WINDOWS_PASSWORD`)
+Read-only (safe to run first):
+
+- `runnerconcierge`: agent operating guide (no setup)
+- `runnerconcierge doctor`: setup preflight (`--docker` when docker executor is required)
+- `runnerconcierge verify`: one-line service status
+- `runnerconcierge status`: inventory and smells (`--json` for agents)
+- `runnerconcierge version`, `help`
+
+Changes this machine or GitLab:
+
+- `runnerconcierge init`: seed user `config.yaml`
+- `runnerconcierge runners gitlab setup`: wizard (`--repo group/project` or `--group my-group` for automation; interactive TTY asks project vs group scope, then lists membership). On macOS and Windows, setup also installs the `runnerconcierge-docker-cleanup` schedule (all executor types; safe when Docker is unused)
+- `runnerconcierge repair-service --runner-config PATH`: rebind the **gitlab-runner** service to the login user (`--yes`; Windows password via prompt, `--windows-password`, or `RUNNERCONCIERGE_WINDOWS_PASSWORD`)
+- `runnerconcierge cleanup`: one-shot prune of exited `runner-*` containers older than `--min-age` (default 1h) and dangling `runner-*` volumes. Docker down → skip, exit 0
+- `runnerconcierge cleanup install --yes`: register the periodic helper (macOS LaunchAgent, Windows Task Scheduler). `--yes` replaces legacy helpers whose command basename is `gitlab-runner-docker-cleanup`
+- `runnerconcierge cleanup uninstall`: remove the product helper `runnerconcierge-docker-cleanup` only
+- `runnerconcierge runners gitlab list`: control plane (`--json`, `--name`, `--service`, `--config`, `--action inspect|stop|start|repair|remove`, `--yes`, `--local`, `--id`)
+
+**CONSTRAINT:** MUST pass a forge and subcommand on `runners`.
+
+- MUST: `runners gitlab list` or `runners gitlab setup` (or `runners github`, which fails closed as unimplemented)
+- MUST NOT: invoke `runnerconcierge runners` or bare `runners gitlab` with no `list`/`setup`
+- Enforcement: missing forge exits non-zero with `choose a forge`; bare `runners gitlab` exits with `choose a subcommand`
+- Violation: STOP, add `gitlab list` or `gitlab setup`
+
+## Cleanup (macOS and Windows)
+
+Same prune command on both OSes. Install is the OS schedule, not a shell script.
+
+| OS | Install mechanism | Unit name |
+|----|-------------------|-----------|
+| macOS | LaunchAgent, `StartInterval` from `--interval` (default 10m) | `runnerconcierge-docker-cleanup` |
+| Windows | `schtasks` minute trigger, login user, `/RL LIMITED` | `runnerconcierge-docker-cleanup` |
+| Linux | `cleanup` run is supported | install/uninstall return `unsupported_os` |
+
+**CONSTRAINT:** MUST install the Go helper; MUST NOT add bash, zsh, or PowerShell prune scripts.
+
+- MUST: rely on `runners gitlab setup` to install the schedule on macOS/Windows; use `cleanup install --yes` for existing installs or to repair the helper
+- MUST NOT: write `~/bin/gitlab-runner-docker-cleanup` or a host-branded LaunchAgent label
+- Enforcement: helper command argv is this binary plus `cleanup`
+- Violation: STOP, uninstall the script helper with `--yes`, install the product unit
+
+CORRECT:
+```text
+runnerconcierge cleanup
+runnerconcierge cleanup install --yes
+runnerconcierge cleanup uninstall
+```
+
+PROHIBITED:
+```text
+# new zsh/ps1 sidecar that docker prune's runner leftovers
+```
+
+## Setup and Windows logon
+
+**CONSTRAINT:** MUST install the gitlab-runner **service** as the interactive login user.
+
+- MUST: never LocalSystem
+- MUST: run `doctor` before `runners gitlab setup` on a new host
+- MUST: pass tags only via GitLab `POST /user/runners`, not `gitlab-runner register`
+- MUST NOT: commit PAT or `glrt` tokens
+- Enforcement: `status` findings for LocalSystem / wrong user; secrets stay in keyring or env
+- Violation: STOP, `repair-service`, do not leave LocalSystem running jobs
+
+### Runner token (glrt) and checkpoint resume
+
+Interactive `runners gitlab setup` does **not** ask for a PAT or paste glrt from the GitLab UI.
+
+1. After `glab` is installed: `glab auth login` when `glab api user` fails (confirm in TTY).
+2. Pick `--group` / `--repo` (or the picker; lists only namespaces where you are **Maintainer+**).
+3. GitLab API **creates** or **resets** the runner token; store glrt in the OS keyring before `gitlab-runner register`.
+
+Hosts **without** a GitLab account: a member sends `glrt`; run setup with `--token` (skips login and API mint).
+
+| Account / env | When |
+|---------------|------|
+| `GITLAB_RUNNER_TOKEN_<identity>` | glrt for `parent-tag-hostname` (e.g. `behaviorengineering-macos-macstudio`) |
+| `GITLAB_RUNNER_TOKEN_<id>` / `<tag>` | legacy read fallback only; setup writes identity slot |
+| `--token` | Sent glrt for non-member hosts |
+| `GITLAB_RUNNER_TOKEN` | Legacy pending slot (read-only fallback) |
+
+- MUST: skip login and API mint when `--token` is set, or when checkpoint has `runner_id` and the identity or id keyring slot has glrt
+- MUST NOT: reuse tag-only, pending, or identity keyring glrt when `runner_id` is 0 (mint via GitLab API unless `--token`)
+- MUST: when checkpoint has `runner_id`, skip group/tag/executor setup prompts; backfill `group_path` / `repo_path` from `glab api runners/:id` when missing
+- MUST: resume with `runner_id` and empty keyring resets token via API (not UI paste)
+- MUST: when `gitlab-runner register` reports the token is not valid, reset that runner's token if `runner_id` is set, otherwise create a new runner, then register once more
+- MUST NOT: echo or log glrt values
+- `--fresh` archives checkpoint only; it does not delete keyring entries
+- WHEN `state.json` has `stage=done`, archive it and start a **new** runner setup (do not verify-only-exit; do not ask to resume an incomplete setup)
+- AFTER GitLab create or local register, poll until the **new** runner is online on GitLab (up to 2m) before saving `stage=done`
 
 ## E2E live
 
-- `make e2e-live` on macOS and Windows before releases that touch status/repair.
-- Modes: `E2E_LIVE_MODE=fixture` (default), `observe`, `repair-prod` (requires `E2E_LIVE_ALLOW_PROD=1`).
-- Windows fixture mode needs an elevated session.
+- Local: `E2E_LIVE_MODE=fixture make e2e-live` (Go fixture; no GitLab registration token)
+- GitHub: manual **e2e-live** workflow (`workflow_dispatch`)
+- Refuses to seed if a gitlab-runner service already exists unless `E2E_LIVE_ALLOW_EXISTING=1`
+- `repair-prod` observe path: `E2E_LIVE_ALLOW_PROD=1` (not used on GHA)
+- Re-run after `gitlab-runner` upgrades or changes under `pkg/service`, `pkg/inventory`, `pkg/repair`, or `pkg/cleanup`

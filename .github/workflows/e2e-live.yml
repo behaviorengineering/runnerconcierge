@@ -1,0 +1,58 @@
+name: e2e-live
+
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: "Target OS runner"
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - windows
+          - macos
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-live:
+    name: e2e-live (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows
+            runner: windows-latest
+          - os: macos
+            runner: macos-latest
+    if: >-
+      github.event.inputs.os == 'both' ||
+      github.event.inputs.os == matrix.os
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.0"
+          cache: true
+
+      - name: Live fixture e2e
+        shell: bash
+        env:
+          GOWORK: off
+          E2E_LIVE_MODE: fixture
+          E2E_LIVE_REQUIRE: "1"
+          E2E_LIVE_ARTIFACT_DIR: ${{ runner.temp }}/e2e-artifacts
+        run: make e2e-live
+
+      - name: Upload e2e artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-live-${{ matrix.os }}
+          path: ${{ runner.temp }}/e2e-artifacts
+          if-no-files-found: ignore

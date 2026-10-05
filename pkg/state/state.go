@@ -9,6 +9,9 @@ import (
 
 const fileName = "state.json"
 
+// CheckpointStageDone marks a finished setup (verify passed, runner online).
+const CheckpointStageDone = "done"
+
 // Checkpoint is redacted wizard progress (no tokens or passwords).
 type Checkpoint struct {
 	Version     int       `json:"version"`
@@ -21,6 +24,7 @@ type Checkpoint struct {
 	Executor    string    `json:"executor"`
 	GitLabURL   string    `json:"gitlab_url"`
 	RepoPath    string    `json:"repo_path"`
+	GroupPath   string    `json:"group_path,omitempty"`
 	ConfigPath  string    `json:"config_path"`
 	BinaryPath  string    `json:"binary_path"`
 	ServiceKind string    `json:"service_kind"`

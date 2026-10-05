@@ -11,6 +11,7 @@ type runnersFile struct {
 }
 
 type runnerSection struct {
+	ID       int    `toml:"id"`
 	Name     string `toml:"name"`
 	URL      string `toml:"url"`
 	Executor string `toml:"executor"`
@@ -32,6 +33,7 @@ func parseConfigFile(path string) ([]RunnerEntry, error) {
 			Name:     r.Name,
 			URL:      r.URL,
 			Executor: r.Executor,
+			GitLabID: r.ID,
 		})
 	}
 	return out, nil

@@ -29,6 +29,8 @@ const (
 	CodeServiceMissing        Code = "service_missing"
 	CodeServiceStopped        Code = "service_stopped"
 	CodeRunnerBinaryMissing   Code = "runner_binary_missing"
+	CodeUnsupportedForge      Code = "unsupported_forge"
+	CodeDockerUnavailable     Code = "docker_unavailable"
 )
 
 // Error is a typed domain error with stable code.
@@ -43,8 +45,8 @@ func (e *Error) Error() string {
 	if e == nil {
 		return "<nil>"
 	}
-	if e.Err != nil {
-		return fmt.Sprintf("%s: %s: %v", e.Op, e.Msg, e.Err)
+	if e.Code != "" {
+		return fmt.Sprintf("%s: %s (code=%s)", e.Op, e.Msg, e.Code)
 	}
 	return fmt.Sprintf("%s: %s", e.Op, e.Msg)
 }

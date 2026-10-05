@@ -143,6 +143,7 @@ func buildNextActions(findings []Finding) []string {
 		switch f.Code {
 		case errdefs.CodeBadServiceLogon, errdefs.CodeWrongServiceUser, errdefs.CodeSystemConfig:
 			actions = append(actions, "runnerconcierge repair-service --runner-config "+f.ConfigPath)
+			actions = append(actions, "runnerconcierge runners gitlab list --config "+f.ConfigPath+" --action repair")
 		case errdefs.CodeElevationRequired, errdefs.CodeConfigUnreadable:
 			actions = append(actions, "re-run in an elevated/administrator session, then runnerconcierge status")
 		}

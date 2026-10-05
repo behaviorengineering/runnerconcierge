@@ -60,6 +60,9 @@ func (m *windowsManager) Install(ctx context.Context, opts InstallOpts) error {
 		"--config", cfg,
 		"--working-directory", work,
 	}
+	if strings.TrimSpace(opts.ServiceName) != "" {
+		args = append(args, "--service", strings.TrimSpace(opts.ServiceName))
+	}
 	_, err := m.exec.Run(ctx, bin, args...)
 	if err != nil {
 		if isLogonFailure(err) {
@@ -72,9 +75,42 @@ func (m *windowsManager) Install(ctx context.Context, opts InstallOpts) error {
 	return nil
 }
 
-func (m *windowsManager) Start(ctx context.Context) error {
-	_, err := m.exec.Run(ctx, "gitlab-runner", "start")
-	return err
+func (m *windowsManager) Start(ctx context.Context, opts StartOpts) error {
+	if _, ok := ctx.Deadline(); !ok {
+		return errdefs.New("service.Start", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	args := []string{"start"}
+	if strings.TrimSpace(opts.ServiceName) != "" {
+		args = append(args, "--service", strings.TrimSpace(opts.ServiceName))
+	}
+	_, err := m.exec.Run(ctx, "gitlab-runner", args...)
+	if err != nil {
+		return errdefs.New("service.Start", errdefs.CodeServiceStart, "gitlab-runner start", err)
+	}
+	return nil
+}
+
+func (m *windowsManager) Stop(ctx context.Context, opts StopOpts) error {
+	if _, ok := ctx.Deadline(); !ok {
+		return errdefs.New("service.Stop", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	args := []string{"stop"}
+	if strings.TrimSpace(opts.ServiceName) != "" {
+		args = append(args, "--service", strings.TrimSpace(opts.ServiceName))
+	}
+	_, err := m.exec.Run(ctx, "gitlab-runner", args...)
+	if err != nil && !windowsStopBenign(err) {
+		return errdefs.New("service.Stop", errdefs.CodeServiceStart, "gitlab-runner stop", err)
+	}
+	return nil
+}
+
+func windowsStopBenign(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "not installed") || strings.Contains(msg, "not running")
 }
 
 func (m *windowsManager) Status(ctx context.Context) (string, error) {
@@ -124,15 +160,22 @@ Get-CimInstance Win32_Service | Where-Object {
   }
 } | ConvertTo-Json -Compress
 `
-	out, err := m.exec.Run(ctx, "powershell", "-NoProfile", "-Command", script)
+	psOut, err := m.exec.Run(ctx, "powershell", "-NoProfile", "-Command", script)
 	if err != nil {
 		return nil, err
 	}
-	raw := strings.TrimSpace(string(out))
-	if raw == "" || raw == "null" {
-		return nil, nil
+	raw := strings.TrimSpace(string(psOut))
+	var list []Ownership
+	if raw != "" && raw != "null" {
+		list, err = parseWindowsOwnershipJSON(raw)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return parseWindowsOwnershipJSON(raw)
+	if task := windowsCleanupTaskOwnership(ctx, m.exec); task != nil {
+		list = append(list, *task)
+	}
+	return list, nil
 }
 
 func formatWindowsUser(user string) string {
