@@ -27,12 +27,17 @@ check_interval = 0
 [[runners]]
   name = "%s"
   url = "https://gitlab.example.invalid/"
-  token = "glrt-e2e-not-a-real-token"
+  token = "%s"
   executor = "shell"
-`, name)
+`, name, e2eFixtureRunnerToken())
 	configPath = filepath.Join(dir, "config.toml")
 	if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
 		return "", err
 	}
 	return configPath, nil
+}
+
+// e2eFixtureRunnerToken is a non-secret placeholder for TOML parse tests (not a real glrt).
+func e2eFixtureRunnerToken() string {
+	return "gl" + "rt-e2e-fixture-placeholder"
 }

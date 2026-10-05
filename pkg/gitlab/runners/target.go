@@ -42,7 +42,7 @@ type Target struct {
 // JoinTargets builds picker rows from an inventory report.
 func JoinTargets(rep *inventory.Report) []Target {
 	if rep == nil {
-		return nil
+		return []Target{}
 	}
 	services := dedupeServices(rep.Services)
 	configCount := 0
@@ -108,7 +108,7 @@ func JoinTargets(rep *inventory.Report) []Target {
 		}
 		return out[i].ServiceName < out[j].ServiceName
 	})
-	return out
+	return append([]Target{}, out...)
 }
 
 func roleRank(role string) int {
