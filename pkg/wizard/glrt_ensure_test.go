@@ -25,10 +25,10 @@ func (resetGLRTExec) Run(ctx context.Context, name string, args ...string) ([]by
 
 func TestResetRunnerGLRTIfNeeded_storesFromAPI(t *testing.T) {
 	mem := operatorconfig.NewMemKeyring()
-	cp := &state.Checkpoint{RunnerID: 12}
+	cp := &state.Checkpoint{RunnerID: 12, GroupPath: "acme", Tags: []string{"lab"}}
 	r := &Runner{
 		exec: resetGLRTExec{},
-		opts: Options{Keyring: mem, TagList: []string{"lab"}},
+		opts: Options{Keyring: mem, GroupPath: "acme", TagList: []string{"lab"}},
 		cfg:  &config.UserConfig{GitLabURL: "https://gitlab.com"},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -39,13 +39,13 @@ func TestResetRunnerGLRTIfNeeded_storesFromAPI(t *testing.T) {
 	if r.opts.RunnerToken != "glrt-resume" {
 		t.Fatalf("token %q", r.opts.RunnerToken)
 	}
-	got, err := config.LoadRunnerTokenByTag("lab", mem)
-	if err != nil || got != "glrt-resume" {
-		t.Fatalf("by tag %q err %v", got, err)
+	identity, err := runnerIdentityFor(r.opts, cp)
+	if err != nil {
+		t.Fatal(err)
 	}
-	gotID, err := config.LoadRunnerToken(12, mem)
-	if err != nil || gotID != "glrt-resume" {
-		t.Fatalf("by id %q err %v", gotID, err)
+	got, err := config.LoadRunnerTokenByIdentity(identity, mem)
+	if err != nil || got != "glrt-resume" {
+		t.Fatalf("by identity %q err %v", got, err)
 	}
 }
 
@@ -77,7 +77,7 @@ func TestPromptCanonicalTag_skipsWhenHydrated(t *testing.T) {
 	pr := &recordingPrompter{}
 	cp := &state.Checkpoint{Tags: []string{"from-cp"}}
 	r := &Runner{opts: Options{TagList: []string{"hydrated"}}}
-	if err := r.promptCanonicalTag(context.Background(), pr, cp); err != nil {
+	if err := r.promptRunnerName(context.Background(), pr, cp); err != nil {
 		t.Fatal(err)
 	}
 	if len(r.opts.TagList) != 1 || r.opts.TagList[0] != "hydrated" {

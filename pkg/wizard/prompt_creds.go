@@ -18,28 +18,15 @@ func (r *Runner) keyring() operatorconfig.Keyring {
 	return config.KeyringOrDefault(r.opts.Keyring)
 }
 
-func (r *Runner) hasStoredRunnerToken(runnerID int, cp *state.Checkpoint) (string, error) {
-	if runnerID > 0 {
-		tok, err := config.LoadRunnerToken(runnerID, r.keyring())
-		if err != nil || tok != "" {
-			return tok, err
-		}
-	}
-	tag := canonicalTag(r.opts, cp)
-	if tag != "" {
-		tok, err := config.LoadRunnerTokenByTag(tag, r.keyring())
-		if err != nil || tok != "" {
-			return tok, err
-		}
-	}
-	return config.LoadPendingRunnerToken(r.keyring())
+func (r *Runner) hasStoredRunnerToken(cp *state.Checkpoint) (string, error) {
+	return loadStoredRunnerGLRT(r.opts, cp, r.keyring())
 }
 
 func (r *Runner) loadGLRTIntoOpts(runnerID int, cp *state.Checkpoint) error {
 	if strings.TrimSpace(r.opts.RunnerToken) != "" {
 		return nil
 	}
-	stored, err := r.hasStoredRunnerToken(runnerID, cp)
+	stored, err := r.hasStoredRunnerToken(cp)
 	if err != nil {
 		return err
 	}
@@ -49,23 +36,12 @@ func (r *Runner) loadGLRTIntoOpts(runnerID int, cp *state.Checkpoint) error {
 	return nil
 }
 
-func (r *Runner) storeRunnerGLRT(runnerID int, tag, token string) error {
+func (r *Runner) storeRunnerGLRT(cp *state.Checkpoint, token string) error {
 	if strings.TrimSpace(token) == "" {
 		return nil
 	}
-	if tag != "" {
-		if err := config.StoreRunnerTokenByTag(tag, token, r.keyring()); err != nil {
-			return err
-		}
-	} else if runnerID == 0 {
-		if err := config.StorePendingRunnerToken(token, r.keyring()); err != nil {
-			return err
-		}
-	}
-	if runnerID > 0 {
-		return config.StoreRunnerToken(runnerID, token, r.keyring())
-	}
-	return nil
+	identity, idErr := runnerIdentityFor(r.opts, cp)
+	return storeRunnerGLRTKeyring(identity, idErr, token, r.keyring())
 }
 
 func (r *Runner) hasRunnerToken(cp *state.Checkpoint) bool {
@@ -163,6 +139,5 @@ func (r *Runner) resetRunnerGLRTIfNeeded(ctx context.Context, cp *state.Checkpoi
 		return errdefs.New("setup", errdefs.CodeOf(err), "could not reset runner authentication token", err)
 	}
 	r.opts.RunnerToken = tok
-	tag := canonicalTag(r.opts, cp)
-	return r.storeRunnerGLRT(cp.RunnerID, tag, tok)
+	return r.storeRunnerGLRT(cp, tok)
 }

@@ -9,9 +9,9 @@ import (
 	"github.com/behaviorengineering/runnerconcierge/pkg/state"
 )
 
-const runnerTagInputTitle = "Runner tag (CI jobs match this; glrt keyring entry is GITLAB_RUNNER_TOKEN_<tag>)"
+const runnerNameInputTitle = "Runner name (short label for this machine)"
 
-// canonicalTag returns the primary tag used for CI and keyring account names.
+// canonicalTag returns the runner name label from flags or checkpoint (also the primary GitLab job tag).
 func canonicalTag(opts Options, cp *state.Checkpoint) string {
 	if len(opts.TagList) > 0 {
 		if t := strings.TrimSpace(opts.TagList[0]); t != "" {
@@ -26,7 +26,7 @@ func canonicalTag(opts Options, cp *state.Checkpoint) string {
 	return ""
 }
 
-func (r *Runner) promptCanonicalTag(ctx context.Context, pr prompt.Prompter, cp *state.Checkpoint) error {
+func (r *Runner) promptRunnerName(ctx context.Context, pr prompt.Prompter, cp *state.Checkpoint) error {
 	if r == nil {
 		return fmt.Errorf("wizard: runner is nil")
 	}
@@ -40,13 +40,13 @@ func (r *Runner) promptCanonicalTag(ctx context.Context, pr prompt.Prompter, cp 
 	if cp != nil && len(cp.Tags) > 0 {
 		defaultVal = strings.TrimSpace(cp.Tags[0])
 	}
-	val, err := pr.Input(ctx, runnerTagInputTitle, "e.g. homelab-mac", defaultVal)
+	val, err := pr.Input(ctx, runnerNameInputTitle, "e.g. macos-dss", defaultVal)
 	if err != nil {
 		return err
 	}
 	val = strings.TrimSpace(val)
 	if val == "" {
-		return fmt.Errorf("wizard: runner tag is required")
+		return fmt.Errorf("wizard: runner name is required")
 	}
 	r.opts.TagList = []string{val}
 	if cp != nil {

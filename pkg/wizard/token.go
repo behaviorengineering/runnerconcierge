@@ -15,6 +15,63 @@ import (
 // createRunnerFunc creates a GitLab runner and returns id + glrt.
 type createRunnerFunc func(ctx context.Context) (int, string, error)
 
+func loadStoredRunnerGLRT(opts Options, cp *state.Checkpoint, kr operatorconfig.Keyring) (token string, err error) {
+	if opts.IgnoreKeyringGLRT {
+		return "", nil
+	}
+	kr = config.KeyringOrDefault(kr)
+	identity, idErr := runnerIdentityFor(opts, cp)
+	if idErr == nil {
+		tok, err := config.LoadRunnerTokenByIdentity(identity, kr)
+		if err != nil || tok != "" {
+			return tok, err
+		}
+	}
+	runnerID := 0
+	if cp != nil {
+		runnerID = cp.RunnerID
+	}
+	tag := canonicalTag(opts, cp)
+	if runnerID > 0 {
+		tok, err := config.LoadRunnerToken(runnerID, kr)
+		if err != nil {
+			return "", err
+		}
+		if tok != "" {
+			migrateRunnerGLRTToIdentity(identity, idErr, tok, kr)
+			return tok, nil
+		}
+	}
+	if tag != "" {
+		tok, err := config.LoadRunnerTokenByTag(tag, kr)
+		if err != nil {
+			return "", err
+		}
+		if tok != "" {
+			migrateRunnerGLRTToIdentity(identity, idErr, tok, kr)
+			return tok, nil
+		}
+	}
+	return config.LoadPendingRunnerToken(kr)
+}
+
+func migrateRunnerGLRTToIdentity(identity string, idErr error, token string, kr operatorconfig.Keyring) {
+	if idErr != nil || strings.TrimSpace(identity) == "" || strings.TrimSpace(token) == "" {
+		return
+	}
+	_ = config.StoreRunnerTokenByIdentity(identity, token, kr)
+}
+
+func storeRunnerGLRTKeyring(identity string, idErr error, token string, kr operatorconfig.Keyring) error {
+	if strings.TrimSpace(token) == "" {
+		return nil
+	}
+	if idErr == nil && strings.TrimSpace(identity) != "" {
+		return config.StoreRunnerTokenByIdentity(identity, token, kr)
+	}
+	return config.StorePendingRunnerToken(token, kr)
+}
+
 // resolveRegisterToken loads or creates a glrt and persists it to the keyring.
 func resolveRegisterToken(
 	ctx context.Context,
@@ -27,25 +84,12 @@ func resolveRegisterToken(
 		return "", 0, fmt.Errorf("wizard: checkpoint is nil")
 	}
 	kr = config.KeyringOrDefault(kr)
+	identity, idErr := runnerIdentityFor(opts, cp)
 	token = strings.TrimSpace(opts.RunnerToken)
 	runnerID = cp.RunnerID
 
-	tag := canonicalTag(opts, cp)
-
-	if token == "" && runnerID > 0 {
-		token, err = config.LoadRunnerToken(runnerID, kr)
-		if err != nil {
-			return "", runnerID, err
-		}
-	}
-	if token == "" && tag != "" {
-		token, err = config.LoadRunnerTokenByTag(tag, kr)
-		if err != nil {
-			return "", runnerID, err
-		}
-	}
 	if token == "" {
-		token, err = config.LoadPendingRunnerToken(kr)
+		token, err = loadStoredRunnerGLRT(opts, cp, kr)
 		if err != nil {
 			return "", runnerID, err
 		}
@@ -60,7 +104,7 @@ func resolveRegisterToken(
 			return "", runnerID, err
 		}
 		cp.RunnerID = runnerID
-		if err := storeRunnerGLRTKeyring(runnerID, tag, token, kr); err != nil {
+		if err := storeRunnerGLRTKeyring(identity, idErr, token, kr); err != nil {
 			return "", runnerID, err
 		}
 	} else if token == "" && runnerID > 0 {
@@ -68,7 +112,7 @@ func resolveRegisterToken(
 			fmt.Sprintf("runner %d exists but glrt token missing; pass --token or recreate in GitLab", runnerID),
 			nil)
 	} else if token != "" {
-		if err := storeRunnerGLRTKeyring(runnerID, tag, token, kr); err != nil {
+		if err := storeRunnerGLRTKeyring(identity, idErr, token, kr); err != nil {
 			return "", runnerID, err
 		}
 	}
@@ -79,29 +123,10 @@ func resolveRegisterToken(
 	return token, runnerID, nil
 }
 
-func storeRunnerGLRTKeyring(runnerID int, tag, token string, kr operatorconfig.Keyring) error {
-	if strings.TrimSpace(token) == "" {
-		return nil
-	}
-	if tag != "" {
-		if err := config.StoreRunnerTokenByTag(tag, token, kr); err != nil {
-			return err
-		}
-	} else if runnerID == 0 {
-		if err := config.StorePendingRunnerToken(token, kr); err != nil {
-			return err
-		}
-	}
-	if runnerID > 0 {
-		return config.StoreRunnerToken(runnerID, token, kr)
-	}
-	return nil
-}
-
 func (r *Runner) resolveRegisterToken(ctx context.Context, cp *state.Checkpoint) (token string, runnerID int, err error) {
 	create := func(ctx context.Context) (int, string, error) {
 		client := gitlabrunner.NewClient(r.gitlabURL(), r.exec, nil)
-		req, err := r.createRequest(ctx)
+		req, err := r.createRequest(ctx, cp)
 		if err != nil {
 			return 0, "", err
 		}
@@ -113,6 +138,7 @@ func (r *Runner) resolveRegisterToken(ctx context.Context, cp *state.Checkpoint)
 		cp.Description = req.Description
 		cp.Tags = req.TagList
 		cp.Executor = r.executor()
+		r.syncSetupCheckpoint(cp)
 		if err := r.store.Save(cp); err != nil {
 			return 0, "", errdefs.New("setup", errdefs.CodeProcessConflict, "could not save checkpoint", err)
 		}

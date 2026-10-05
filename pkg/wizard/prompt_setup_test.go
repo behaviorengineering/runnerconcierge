@@ -17,6 +17,25 @@ func (s *selectFailPrompter) Select(ctx context.Context, title string, options [
 	return 0, fmt.Errorf("select called: %s", title)
 }
 
+func TestPromptSetup_skipsWhenRunnerIDSet(t *testing.T) {
+	cfg, _ := config.Load("")
+	cp := &state.Checkpoint{
+		RunnerID:  57039107,
+		Tags:      []string{"macos"},
+		Executor:  "docker",
+		GroupPath: "behaviorengineering",
+	}
+	r := &Runner{
+		cfg:   cfg,
+		opts:  Options{TagList: []string{"macos"}, Executor: "docker", GroupPath: "behaviorengineering", RunnerType: runnerTypeGroup},
+		store: &state.Store{Dir: t.TempDir()},
+	}
+	pr := &selectFailPrompter{}
+	if err := r.promptSetupOptions(context.Background(), pr, cp); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPromptSetup_skipsProjectWhenHydrated(t *testing.T) {
 	cfg, _ := config.Load("")
 	cp := &state.Checkpoint{RepoPath: "acme/widget"}

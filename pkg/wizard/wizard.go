@@ -25,24 +25,25 @@ import (
 
 // Options controls wizard execution.
 type Options struct {
-	ConfigPath      string
-	Preset          preset.Preset
-	NonInteractive  bool
-	Resume          bool
-	Fresh           bool
-	AllowInstall    bool
-	RunnerToken     string
-	PAT             string
-	Keyring         operatorconfig.Keyring // nil → OS keyring
-	ProjectPath     string
-	GroupPath       string
-	RunnerType      string
-	Executor        string
-	TagList         []string
-	RunUntagged     bool
-	WindowsPassword string
-	RequireDocker   bool
-	Prompter        prompt.Prompter
+	ConfigPath        string
+	Preset            preset.Preset
+	NonInteractive    bool
+	Resume            bool
+	Fresh             bool
+	AllowInstall      bool
+	RunnerToken       string
+	IgnoreKeyringGLRT bool // wizard sets after archiving stage=done; mint fresh glrt
+	PAT               string
+	Keyring           operatorconfig.Keyring // nil → OS keyring
+	ProjectPath       string
+	GroupPath         string
+	RunnerType        string
+	Executor          string
+	TagList           []string
+	RunUntagged       bool
+	WindowsPassword   string
+	RequireDocker     bool
+	Prompter          prompt.Prompter
 }
 
 // Runner orchestrates setup stages.
@@ -103,6 +104,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	cp, found = r.beginFromStoredCheckpoint(cp, found)
 	if found && !r.opts.Fresh && !r.opts.Resume && !r.opts.NonInteractive {
 		tagHint := ""
 		if cp != nil && len(cp.Tags) > 0 {
@@ -133,10 +135,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		r.outResumeSummary(cp)
 	}
 
-	if err := r.promptCanonicalTag(ctx, pr, cp); err != nil {
-		return err
-	}
-	if err := r.hydrateRunnerToken(cp); err != nil {
+	if err := r.promptRunnerName(ctx, pr, cp); err != nil {
 		return err
 	}
 	if len(r.opts.TagList) > 0 {
@@ -196,7 +195,19 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
+	if r.needsScopeHydration(cp) {
+		if err := r.hydrateRunnerScopeFromGitLab(ctx, cp); err != nil {
+			if !r.hasRunnerToken(cp) {
+				return err
+			}
+			r.out("setup: could not load runner scope from GitLab: " + err.Error())
+		}
+	}
+
 	if err := r.promptSetupOptions(ctx, pr, cp); err != nil {
+		return err
+	}
+	if err := r.hydrateRunnerToken(cp); err != nil {
 		return err
 	}
 	if !r.hasRunnerToken(cp) {
@@ -216,7 +227,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	regArgs, err := gitlabrunner.BuildRegisterArgv(gitlabrunner.RegisterArgs{
 		URL:              r.gitlabURL(),
 		Token:            token,
-		Name:             r.runnerName(),
+		Name:             r.runnerName(cp),
 		Executor:         r.executor(),
 		ConfigPath:       cfgPath,
 		WorkingDirectory: workDir,
@@ -262,14 +273,37 @@ func (r *Runner) Run(ctx context.Context) error {
 		_ = r.store.Save(cp)
 	}
 
-	if runnerID > 0 {
-		if err := client.WaitOnline(ctx, runnerID, 2*time.Minute); err != nil {
-			return err
-		}
+	if err := r.verifyRunnerOnlineOnGitLab(ctx, runnerID); err != nil {
+		return err
 	}
 	cp.Completed = appendUnique(cp.Completed, "verify")
-	cp.Stage = "done"
+	cp.Stage = state.CheckpointStageDone
 	return r.store.Save(cp)
+}
+
+// beginFromStoredCheckpoint archives a finished checkpoint so setup can register a new runner.
+func (r *Runner) beginFromStoredCheckpoint(cp *state.Checkpoint, found bool) (*state.Checkpoint, bool) {
+	if r == nil || !found || r.opts.Fresh || cp == nil {
+		return cp, found
+	}
+	if cp.Stage != state.CheckpointStageDone {
+		return cp, found
+	}
+	parts := []string{"setup: previous setup is complete"}
+	if cp.RunnerID > 0 {
+		parts = append(parts, fmt.Sprintf("runner_id=%d", cp.RunnerID))
+	}
+	if tag := canonicalTag(r.opts, cp); tag != "" {
+		parts = append(parts, fmt.Sprintf("tag=%q", tag))
+	} else if len(cp.Tags) > 0 {
+		if t := strings.TrimSpace(cp.Tags[0]); t != "" {
+			parts = append(parts, fmt.Sprintf("tag=%q", t))
+		}
+	}
+	r.out(strings.Join(parts, " ") + "; starting a new runner setup")
+	_ = r.store.Archive()
+	r.opts.IgnoreKeyringGLRT = true
+	return cp, false
 }
 
 func (r *Runner) outResumeSummary(cp *state.Checkpoint) {
@@ -322,13 +356,13 @@ func (r *Runner) executor() string {
 	return r.cfg.DefaultExecutor
 }
 
-func (r *Runner) createRequest(ctx context.Context) (gitlabrunner.CreateRunnerRequest, error) {
+func (r *Runner) createRequest(ctx context.Context, cp *state.Checkpoint) (gitlabrunner.CreateRunnerRequest, error) {
 	tags := r.opts.TagList
 	if len(tags) == 0 {
 		tags = r.preset.TagList
 	}
 	runUntagged := r.opts.RunUntagged || r.preset.RunUntagged
-	desc := strings.TrimSpace(r.cfg.DescriptionPrefix + " " + hostname())
+	desc := r.runnerDescription(cp)
 	client := gitlabrunner.NewClient(r.gitlabURL(), r.exec, nil)
 
 	req := gitlabrunner.CreateRunnerRequest{
@@ -388,9 +422,20 @@ func (r *Runner) effectiveRunnerType() string {
 	return ""
 }
 
-func (r *Runner) runnerName() string {
+func (r *Runner) runnerName(cp *state.Checkpoint) string {
+	if id, err := runnerIdentityFor(r.opts, cp); err == nil {
+		return id
+	}
 	h, _ := os.Hostname()
 	return strings.TrimSpace(h)
+}
+
+func (r *Runner) runnerDescription(cp *state.Checkpoint) string {
+	name := r.runnerName(cp)
+	if p := strings.TrimSpace(r.cfg.DescriptionPrefix); p != "" {
+		return strings.TrimSpace(p + " " + name)
+	}
+	return name
 }
 
 func hostname() string {

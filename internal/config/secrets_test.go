@@ -66,6 +66,26 @@ func TestStoreRunnerTokenEmpty(t *testing.T) {
 	}
 }
 
+func TestStoreLoadRunnerTokenByIdentity(t *testing.T) {
+	mem := operatorconfig.NewMemKeyring()
+	const tok = "glrt-ident"
+	const identity = "behaviorengineering-macos-macstudio"
+	if err := StoreRunnerTokenByIdentity(identity, tok, mem); err != nil {
+		t.Fatal(err)
+	}
+	env, err := RunnerTokenEnvForIdentity(identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env != "GITLAB_RUNNER_TOKEN_behaviorengineering-macos-macstudio" {
+		t.Fatalf("env %q", env)
+	}
+	got, err := LoadRunnerTokenByIdentity(identity, mem)
+	if err != nil || got != tok {
+		t.Fatalf("got %q err %v", got, err)
+	}
+}
+
 func TestStoreLoadRunnerTokenByTag(t *testing.T) {
 	mem := operatorconfig.NewMemKeyring()
 	const tok = "glrt-tag"

@@ -3,6 +3,7 @@ package wizard
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/behaviorengineering/operatorconfig/pkg/operatorconfig"
@@ -11,14 +12,27 @@ import (
 	"github.com/behaviorengineering/runnerconcierge/pkg/state"
 )
 
+func testRunnerIdentity(parent, tag string) (string, error) {
+	host, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+	return RunnerIdentity(parent, tag, host)
+}
+
 func TestResolveRegisterTokenFromKeyring(t *testing.T) {
 	mem := operatorconfig.NewMemKeyring()
 	const tok = "glrt-resume"
-	if err := config.StoreRunnerToken(55, tok, mem); err != nil {
+	identity, err := testRunnerIdentity("acme", "lab")
+	if err != nil {
 		t.Fatal(err)
 	}
-	cp := &state.Checkpoint{RunnerID: 55}
-	got, id, err := resolveRegisterToken(context.Background(), Options{}, cp, mem, nil)
+	if err := config.StoreRunnerTokenByIdentity(identity, tok, mem); err != nil {
+		t.Fatal(err)
+	}
+	cp := &state.Checkpoint{RunnerID: 55, GroupPath: "acme", Tags: []string{"lab"}}
+	opts := Options{GroupPath: "acme", TagList: []string{"lab"}}
+	got, id, err := resolveRegisterToken(context.Background(), opts, cp, mem, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,8 +43,9 @@ func TestResolveRegisterTokenFromKeyring(t *testing.T) {
 
 func TestResolveRegisterTokenMissingWithID(t *testing.T) {
 	mem := operatorconfig.NewMemKeyring()
-	cp := &state.Checkpoint{RunnerID: 12}
-	_, _, err := resolveRegisterToken(context.Background(), Options{}, cp, mem, nil)
+	cp := &state.Checkpoint{RunnerID: 12, GroupPath: "acme", Tags: []string{"lab"}}
+	opts := Options{GroupPath: "acme", TagList: []string{"lab"}}
+	_, _, err := resolveRegisterToken(context.Background(), opts, cp, mem, nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -41,18 +56,23 @@ func TestResolveRegisterTokenMissingWithID(t *testing.T) {
 
 func TestResolveRegisterTokenCreatesAndStores(t *testing.T) {
 	mem := operatorconfig.NewMemKeyring()
-	cp := &state.Checkpoint{}
+	cp := &state.Checkpoint{GroupPath: "acme", Tags: []string{"lab"}}
+	opts := Options{GroupPath: "acme", TagList: []string{"lab"}}
+	identity, err := testRunnerIdentity("acme", "lab")
+	if err != nil {
+		t.Fatal(err)
+	}
 	create := func(ctx context.Context) (int, string, error) {
 		return 88, "glrt-new", nil
 	}
-	got, id, err := resolveRegisterToken(context.Background(), Options{}, cp, mem, create)
+	got, id, err := resolveRegisterToken(context.Background(), opts, cp, mem, create)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got != "glrt-new" || id != 88 || cp.RunnerID != 88 {
 		t.Fatalf("token=%q id=%d cp=%d", got, id, cp.RunnerID)
 	}
-	loaded, err := config.LoadRunnerToken(88, mem)
+	loaded, err := config.LoadRunnerTokenByIdentity(identity, mem)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,32 +81,38 @@ func TestResolveRegisterTokenCreatesAndStores(t *testing.T) {
 	}
 }
 
-func TestResolveRegisterTokenFlagStoresPending(t *testing.T) {
+func TestResolveRegisterTokenFlagStoresIdentity(t *testing.T) {
 	mem := operatorconfig.NewMemKeyring()
-	cp := &state.Checkpoint{}
-	got, id, err := resolveRegisterToken(context.Background(), Options{RunnerToken: "glrt-flag", TagList: []string{"lab"}}, cp, mem, nil)
+	cp := &state.Checkpoint{GroupPath: "acme", Tags: []string{"lab"}}
+	opts := Options{RunnerToken: "glrt-flag", GroupPath: "acme", TagList: []string{"lab"}}
+	identity, err := testRunnerIdentity("acme", "lab")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, id, err := resolveRegisterToken(context.Background(), opts, cp, mem, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got != "glrt-flag" || id != 0 {
 		t.Fatalf("token=%q id=%d", got, id)
 	}
-	byTag, err := config.LoadRunnerTokenByTag("lab", mem)
+	byID, err := config.LoadRunnerTokenByIdentity(identity, mem)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if byTag != "glrt-flag" {
-		t.Fatalf("tag store %q", byTag)
+	if byID != "glrt-flag" {
+		t.Fatalf("identity store %q", byID)
 	}
 }
 
 func TestResolveRegisterTokenCreateError(t *testing.T) {
 	mem := operatorconfig.NewMemKeyring()
-	cp := &state.Checkpoint{}
+	cp := &state.Checkpoint{GroupPath: "acme", Tags: []string{"lab"}}
+	opts := Options{GroupPath: "acme", TagList: []string{"lab"}}
 	create := func(ctx context.Context) (int, string, error) {
 		return 0, "", errors.New("api down")
 	}
-	_, _, err := resolveRegisterToken(context.Background(), Options{}, cp, mem, create)
+	_, _, err := resolveRegisterToken(context.Background(), opts, cp, mem, create)
 	if err == nil {
 		t.Fatal("expected error")
 	}

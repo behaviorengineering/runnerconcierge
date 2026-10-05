@@ -3,6 +3,7 @@ package gitlabrunner
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -46,6 +47,31 @@ func (c *Client) ListMemberProjects(ctx context.Context) ([]MemberProject, error
 		}
 	}
 	return out, nil
+}
+
+// ResolveProjectPathByID returns path_with_namespace for a numeric project id.
+func (c *Client) ResolveProjectPathByID(ctx context.Context, projectID int) (string, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		return "", errdefs.New("ResolveProjectPathByID", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	if projectID <= 0 {
+		return "", errdefs.New("gitlabrunner.ResolveProjectPathByID", errdefs.CodeInvalidScope, "project id is required", nil)
+	}
+	out, err := c.Exec.Run(ctx, "glab", "api", fmt.Sprintf("projects/%d", projectID))
+	if err != nil {
+		return "", errdefs.New("gitlabrunner.ResolveProjectPathByID", errdefs.CodeCreateFailed, glabFailureMessage(err), err)
+	}
+	var resp struct {
+		PathWithNamespace string `json:"path_with_namespace"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return "", errdefs.New("gitlabrunner.ResolveProjectPathByID", errdefs.CodeCreateFailed, "parse response", err)
+	}
+	path := strings.TrimSpace(resp.PathWithNamespace)
+	if path == "" {
+		return "", errdefs.New("gitlabrunner.ResolveProjectPathByID", errdefs.CodeInvalidScope, "project path not found", nil)
+	}
+	return path, nil
 }
 
 // ProjectPathFromGitRemote returns group/project from origin when it matches the GitLab host.

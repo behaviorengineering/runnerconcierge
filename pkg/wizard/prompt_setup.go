@@ -22,7 +22,13 @@ func (r *Runner) promptSetupOptions(ctx context.Context, pr prompt.Prompter, cp 
 	if pr == nil {
 		return nil
 	}
-	skipScope := strings.TrimSpace(r.opts.RunnerToken) != ""
+	if cp != nil && cp.RunnerID > 0 {
+		applyCheckpointToOpts(&r.opts, cp)
+		r.syncSetupCheckpoint(cp)
+		return r.saveCheckpoint(cp)
+	}
+	// A stored glrt must not skip scope when parent path is still unknown (name would fall back to hostname).
+	skipScope := strings.TrimSpace(r.opts.RunnerToken) != "" && parentScopePath(r.opts, cp) != ""
 
 	if !skipScope && r.effectiveRunnerType() == "" {
 		idx, err := pr.Select(ctx, "Register runner for", []string{
@@ -61,20 +67,8 @@ func (r *Runner) promptSetupOptions(ctx context.Context, pr prompt.Prompter, cp 
 		}
 	}
 
-	defaultTags := strings.Join(r.opts.TagList, ",")
-	if defaultTags == "" && len(r.preset.TagList) > 0 {
-		defaultTags = strings.Join(r.preset.TagList, ",")
-	}
-	placeholder := "e.g. mac-ci,docker"
-	val, err := pr.Input(ctx, "Runner tags (comma-separated)", placeholder, defaultTags)
-	if err != nil {
-		return err
-	}
-	val = strings.TrimSpace(val)
-	if val != "" {
-		r.opts.TagList = splitCommaTags(val)
-	} else if defaultTags != "" {
-		r.opts.TagList = splitCommaTags(defaultTags)
+	if canonicalTag(r.opts, cp) == "" && len(r.preset.TagList) > 0 {
+		r.opts.TagList = append([]string(nil), r.preset.TagList...)
 	}
 
 	if strings.TrimSpace(r.opts.Executor) == "" && strings.TrimSpace(r.preset.Executor) == "" {
@@ -205,15 +199,4 @@ func (r *Runner) promptGroup(ctx context.Context, pr prompt.Prompter, client *gi
 	}
 	r.opts.GroupPath = val
 	return nil
-}
-
-func splitCommaTags(s string) []string {
-	var out []string
-	for _, p := range strings.Split(s, ",") {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
 }

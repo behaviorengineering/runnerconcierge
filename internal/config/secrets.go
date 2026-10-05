@@ -32,6 +32,16 @@ func RunnerTokenEnv(runnerID int) (string, error) {
 	return runnerTokenAccountPrefix + strconv.Itoa(runnerID), nil
 }
 
+// RunnerTokenEnvForIdentity returns the env/account name for a runner identity glrt secret.
+// Example identity behaviorengineering-macos-macstudio → GITLAB_RUNNER_TOKEN_behaviorengineering-macos-macstudio.
+func RunnerTokenEnvForIdentity(identity string) (string, error) {
+	identity = operatorconfig.SanitizeSecret(identity)
+	if identity == "" {
+		return "", fmt.Errorf("config: runner identity is required")
+	}
+	return runnerTokenAccountPrefix + identity, nil
+}
+
 // RunnerTokenEnvForTag returns the env/account name for a human-readable runner tag glrt secret.
 // Example tag homelab-mac → GITLAB_RUNNER_TOKEN_homelab-mac.
 func RunnerTokenEnvForTag(tag string) (string, error) {
@@ -98,6 +108,32 @@ func StoreRunnerTokenByTag(tag string, token string, kr operatorconfig.Keyring) 
 		return errdefs.New("config.StoreRunnerTokenByTag", errdefs.CodeCreateFailed, "could not store runner token", err)
 	}
 	return nil
+}
+
+// StoreRunnerTokenByIdentity saves a glrt under GITLAB_RUNNER_TOKEN_<identity>.
+func StoreRunnerTokenByIdentity(identity, token string, kr operatorconfig.Keyring) error {
+	env, err := RunnerTokenEnvForIdentity(identity)
+	if err != nil {
+		return errdefs.New("config.StoreRunnerTokenByIdentity", errdefs.CodeCreateFailed, err.Error(), err)
+	}
+	clean := operatorconfig.SanitizeSecret(token)
+	if clean == "" {
+		return errdefs.New("config.StoreRunnerTokenByIdentity", errdefs.CodeCreateFailed, "runner token is empty", nil)
+	}
+	kr = KeyringOrDefault(kr)
+	if err := kr.Set(appName, env, clean); err != nil {
+		return errdefs.New("config.StoreRunnerTokenByIdentity", errdefs.CodeCreateFailed, "could not store runner token", err)
+	}
+	return nil
+}
+
+// LoadRunnerTokenByIdentity reads glrt for identity from env then keyring.
+func LoadRunnerTokenByIdentity(identity string, kr operatorconfig.Keyring) (string, error) {
+	env, err := RunnerTokenEnvForIdentity(identity)
+	if err != nil {
+		return "", errdefs.New("config.LoadRunnerTokenByIdentity", errdefs.CodeCreateFailed, err.Error(), err)
+	}
+	return loadSecretFromEnvOrKeyring(env, KeyringOrDefault(kr))
 }
 
 // LoadRunnerTokenByTag reads glrt for tag from env then keyring.

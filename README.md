@@ -8,10 +8,10 @@ Module: `github.com/behaviorengineering/runnerconcierge`
 
 ```bash
 make hooks-install
-make build
-./bin/runnerconcierge init
-./bin/runnerconcierge        # agent operating guide (no setup)
-./bin/runnerconcierge runners gitlab setup  # wizard; on macOS/Windows also installs docker cleanup schedule
+make help          # targets + GitLab workflow
+make init
+make gitlab-setup  # wizard; on macOS/Windows also installs docker cleanup schedule
+make gitlab-list
 ./bin/runnerconcierge doctor
 ./bin/runnerconcierge status
 ```
@@ -60,7 +60,7 @@ runnerconcierge runners gitlab setup --non-interactive --yes \
   --repo group/project --tag-list my-tag --pat "$GITLAB_TOKEN"
 ```
 
-Resume after a failed register: `state.json` keeps runner id, tags, executor, and project/group paths (no glrt). Setup hydrates those into prompts (flags still win), asks tag and glrt first, then doctor/tools. The glrt lives in the keyring (`GITLAB_RUNNER_TOKEN_<tag>` and `GITLAB_RUNNER_TOKEN_<id>` after create). If id is set but keyring is empty, interactive setup asks for glrt again before register. Non-interactive: pass `--token` or env. Pre-register, seed `GITLAB_RUNNER_TOKEN_<tag>` matching the first `--tag-list` value.
+Resume after a failed register: `state.json` keeps runner id, tags, executor, and project/group paths (no glrt). Setup uses `glab auth login` and API create/reset for glrt. The keyring stores `GITLAB_RUNNER_TOKEN_<identity>` where identity is `parent-tag-hostname` (same string as GitLab description and `config.toml` name). Legacy `GITLAB_RUNNER_TOKEN_<id>` / `<tag>` entries are read as fallback. Non-interactive: pass `--token` or env.
 
 ## Forge setup
 

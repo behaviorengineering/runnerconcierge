@@ -3,7 +3,9 @@ package gitlabrunner
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/behaviorengineering/runnerconcierge/pkg/errdefs"
 )
@@ -67,4 +69,29 @@ func (c *Client) ResolveGroupID(ctx context.Context, groupPath string) (int, err
 		return 0, errdefs.New("gitlabrunner.ResolveGroupID", errdefs.CodeInvalidScope, "group id not found for "+groupPath, nil)
 	}
 	return resp.ID, nil
+}
+
+// ResolveGroupPathByID returns full_path for a numeric group id.
+func (c *Client) ResolveGroupPathByID(ctx context.Context, groupID int) (string, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		return "", errdefs.New("ResolveGroupPathByID", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	if groupID <= 0 {
+		return "", errdefs.New("gitlabrunner.ResolveGroupPathByID", errdefs.CodeInvalidScope, "group id is required", nil)
+	}
+	out, err := c.Exec.Run(ctx, "glab", "api", fmt.Sprintf("groups/%d", groupID))
+	if err != nil {
+		return "", errdefs.New("gitlabrunner.ResolveGroupPathByID", errdefs.CodeCreateFailed, glabFailureMessage(err), err)
+	}
+	var resp struct {
+		FullPath string `json:"full_path"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return "", errdefs.New("gitlabrunner.ResolveGroupPathByID", errdefs.CodeCreateFailed, "parse response", err)
+	}
+	path := strings.TrimSpace(resp.FullPath)
+	if path == "" {
+		return "", errdefs.New("gitlabrunner.ResolveGroupPathByID", errdefs.CodeInvalidScope, "group path not found", nil)
+	}
+	return path, nil
 }

@@ -140,15 +140,18 @@ Hosts **without** a GitLab account: a member sends `glrt`; run setup with `--tok
 
 | Account / env | When |
 |---------------|------|
-| `GITLAB_RUNNER_TOKEN_<tag>` | glrt for canonical tag |
-| `GITLAB_RUNNER_TOKEN_<id>` | glrt keyed by GitLab runner id |
+| `GITLAB_RUNNER_TOKEN_<identity>` | glrt for `parent-tag-hostname` (e.g. `behaviorengineering-macos-macstudio`) |
+| `GITLAB_RUNNER_TOKEN_<id>` / `<tag>` | legacy read fallback only; setup writes identity slot |
 | `--token` | Sent glrt for non-member hosts |
 | `GITLAB_RUNNER_TOKEN` | Legacy pending slot (read-only fallback) |
 
 - MUST: skip login and API mint when `--token` or keyring already has glrt
+- MUST: when checkpoint has `runner_id`, skip group/tag/executor setup prompts; backfill `group_path` / `repo_path` from `glab api runners/:id` when missing
 - MUST: resume with `runner_id` and empty keyring resets token via API (not UI paste)
 - MUST NOT: echo or log glrt values
 - `--fresh` archives checkpoint only; it does not delete keyring entries
+- WHEN `state.json` has `stage=done`, archive it and start a **new** runner setup (do not verify-only-exit; do not ask to resume an incomplete setup)
+- AFTER GitLab create or local register, poll until the **new** runner is online on GitLab (up to 2m) before saving `stage=done`
 
 ## E2E live
 
