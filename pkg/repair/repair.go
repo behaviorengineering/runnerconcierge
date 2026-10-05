@@ -112,8 +112,10 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		ServiceName: targetName,
 		UseBrew:     useBrew || opts.UseBrewServices,
 	}
-	if err := svcMgr.Uninstall(ctx, un); err != nil {
-		return nil, err
+	if hasTargetService(services, targetName) {
+		if err := svcMgr.Uninstall(ctx, un); err != nil {
+			return nil, err
+		}
 	}
 	winUser := login
 	if runtime.GOOS == "windows" {
@@ -143,8 +145,29 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !hasRunningServiceForConfig(after.Services, targetName, cfgPath) {
+		return &Result{Before: before, After: after, BackupPath: backup}, fmt.Errorf("repair: replacement service was not verified; system config kept at %s (backup at %s)", opts.ConfigPath, backup)
+	}
 	if inventory.HasBlockingForTarget(after, cfgPath, targetName) {
 		return &Result{Before: before, After: after, BackupPath: backup}, fmt.Errorf("repair: blocking findings remain after repair")
+	}
+	if opts.MoveConfigToUser && service.IsSystemConfigPath(opts.ConfigPath) {
+		same, err := samePath(opts.ConfigPath, cfgPath)
+		if err != nil {
+			return &Result{Before: before, After: after, BackupPath: backup}, err
+		}
+		if !same {
+			if err := os.Remove(opts.ConfigPath); err != nil {
+				return &Result{Before: before, After: after, BackupPath: backup}, fmt.Errorf("repair: could not retire system config %s (backup at %s): %w", opts.ConfigPath, backup, err)
+			}
+			after, err = inventory.Run(ctx, inventory.Options{Exec: opts.Exec, LoginUser: login, ExtraConfigPaths: []string{cfgPath}})
+			if err != nil {
+				return &Result{Before: before, After: after, BackupPath: backup}, err
+			}
+			if inventory.HasBlockingForTarget(after, cfgPath, targetName) {
+				return &Result{Before: before, After: after, BackupPath: backup}, fmt.Errorf("repair: blocking findings remain after retiring system config")
+			}
+		}
 	}
 	return &Result{Before: before, After: after, BackupPath: backup}, nil
 }
@@ -162,6 +185,13 @@ func snapshotConfig(path string) (string, error) {
 }
 
 func mergeConfig(from, to string) error {
+	same, err := samePath(from, to)
+	if err != nil {
+		return err
+	}
+	if same {
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(to), 0o700); err != nil {
 		return err
 	}
@@ -181,6 +211,49 @@ func mergeConfig(from, to string) error {
 		data = merged
 	}
 	return os.WriteFile(to, data, 0o600)
+}
+
+func samePath(first, second string) (bool, error) {
+	first, err := filepath.Abs(first)
+	if err != nil {
+		return false, err
+	}
+	second, err = filepath.Abs(second)
+	if err != nil {
+		return false, err
+	}
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(first, second), nil
+	}
+	return first == second, nil
+}
+
+func hasTargetService(services []service.Ownership, targetName string) bool {
+	if strings.TrimSpace(targetName) == "" {
+		return false
+	}
+	for _, item := range services {
+		if strings.EqualFold(item.ServiceName, targetName) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasRunningServiceForConfig(services []service.Ownership, targetName, configPath string) bool {
+	for _, item := range services {
+		if targetName != "" && !strings.EqualFold(item.ServiceName, targetName) {
+			continue
+		}
+		if item.Role != service.RoleSupervisor || !item.ProcessUp {
+			continue
+		}
+		same, err := samePath(item.ConfigPath, configPath)
+		if err == nil && same {
+			return true
+		}
+	}
+	return false
 }
 
 func resolveTarget(opts Options, services []service.Ownership, before *inventory.Report) (string, bool) {
