@@ -10,12 +10,14 @@
 
 ## When to run
 
-| Mode | Phases |
-|------|--------|
-| **Wire only** | 0 → 2 → 3 → 4 |
-| **Refresh content + wire** | 0 → 1 → 2 → 3 → 4 |
+| Trigger | Mode | Phases |
+|---------|------|--------|
+| Missing IDE discovery links (operate) | **Wire only** | 0 → 2 → 3 → 4 |
+| User asks to refresh harness content | **Refresh content + wire** | 0 → 1 → 2 → 3 → 4 |
 
-Also run `make hooks-install` in this clone before the first commit.
+IF `.cursor/skills/runnerconcierge-operator` or `.github/skills/runnerconcierge-operator` is missing, run wire-only **before** you operate.
+
+First commit in this clone: run `make hooks-install` (Lefthook) after wire verification in phase 4. That is separate from operate-time wire-if-missing.
 
 ---
 

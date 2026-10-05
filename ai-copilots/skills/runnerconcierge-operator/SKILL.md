@@ -12,9 +12,11 @@ description: >-
 
 ## Start every task
 
-1. Confirm this checkout is `github.com/behaviorengineering/runnerconcierge` (`git rev-parse --show-toplevel`).
+1. Follow [AGENTS.md](../../../AGENTS.md) wire-if-missing (BOOTSTRAP wire mode when IDE discovery links are absent), then confirm this checkout is `github.com/behaviorengineering/runnerconcierge` (`git rev-parse --show-toplevel`).
 2. Build when needed: `make build`.
 3. Prefer inspect commands before anything that stops, removes, or rebinds a unit.
+
+BOOTSTRAP wire is for IDE discovery links; it is not a substitute for `setup` when installing runners.
 
 ## Inspect then act
 
