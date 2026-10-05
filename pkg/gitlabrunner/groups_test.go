@@ -3,6 +3,8 @@ package gitlabrunner
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -12,6 +14,9 @@ type groupsFakeExec struct{}
 func (g *groupsFakeExec) LookPath(name string) (string, error) { return name, nil }
 func (g *groupsFakeExec) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	if name == "glab" && len(args) >= 2 && args[0] == "api" && stringsHasPrefix(args[1], "groups?") {
+		if !strings.Contains(args[1], "min_access_level=40") {
+			return nil, errors.New("missing min_access_level")
+		}
 		body, _ := json.Marshal([]MemberGroup{
 			{ID: 10, FullPath: "acme", Name: "Acme"},
 		})

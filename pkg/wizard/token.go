@@ -105,8 +105,7 @@ func (r *Runner) resolveRegisterToken(ctx context.Context, cp *state.Checkpoint)
 		if err != nil {
 			return 0, "", err
 		}
-		pat := strings.TrimSpace(r.opts.PAT)
-		runnerID, token, err := client.CreateRunner(ctx, req, pat)
+		runnerID, token, err := client.CreateRunner(ctx, req, "")
 		if err != nil {
 			return 0, "", errdefs.New("setup", errdefs.CodeOf(err), "could not create GitLab runner", err)
 		}

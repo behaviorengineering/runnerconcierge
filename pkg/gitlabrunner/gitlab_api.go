@@ -80,6 +80,19 @@ func newDeleteErr(msg string, err error) *errdefs.Error {
 
 const listOwnedRunnersOp = "gitlabrunner.ListOwnedRunners"
 
+const resetRunnerTokenOp = "gitlabrunner.ResetAuthenticationToken"
+
+const memberAccessOp = "gitlabrunner.MemberAccessLevel"
+
+const ensureCreateRunnerOp = "gitlabrunner.EnsureCanCreateRunner"
+
+// AccessMaintainer is the GitLab access_level for Maintainer (create runners).
+const AccessMaintainer = 40
+
+func newResetErr(msg string, err error) *errdefs.Error {
+	return errdefs.New(resetRunnerTokenOp, errdefs.CodeCreateFailed, msg, err)
+}
+
 // ValidateCreateRunnerRequest ensures runner_type scope fields are set before POST.
 func ValidateCreateRunnerRequest(req CreateRunnerRequest) error {
 	switch strings.TrimSpace(req.RunnerType) {

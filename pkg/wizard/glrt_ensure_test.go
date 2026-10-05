@@ -3,21 +3,37 @@ package wizard
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/behaviorengineering/operatorconfig/pkg/operatorconfig"
 	"github.com/behaviorengineering/runnerconcierge/internal/config"
-	"github.com/behaviorengineering/runnerconcierge/pkg/errdefs"
 	"github.com/behaviorengineering/runnerconcierge/pkg/state"
 )
 
-func TestEnsureGLRTInteractive_repromptsOnResume(t *testing.T) {
+type resetGLRTExec struct{}
+
+func (resetGLRTExec) LookPath(name string) (string, error) { return name, nil }
+func (resetGLRTExec) RunJSON(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return resetGLRTExec{}.Run(ctx, name, args...)
+}
+func (resetGLRTExec) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if name == "glab" && len(args) >= 4 && args[3] == "runners/12/reset_authentication_token" {
+		return []byte(`{"token":"glrt-resume"}`), nil
+	}
+	return nil, nil
+}
+
+func TestResetRunnerGLRTIfNeeded_storesFromAPI(t *testing.T) {
 	mem := operatorconfig.NewMemKeyring()
-	pr := &recordingPrompter{passwords: []string{"glrt-resume"}}
 	cp := &state.Checkpoint{RunnerID: 12}
 	r := &Runner{
+		exec: resetGLRTExec{},
 		opts: Options{Keyring: mem, TagList: []string{"lab"}},
+		cfg:  &config.UserConfig{GitLabURL: "https://gitlab.com"},
 	}
-	if err := r.ensureGLRTInteractive(context.Background(), pr, cp); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := r.resetRunnerGLRTIfNeeded(ctx, cp); err != nil {
 		t.Fatal(err)
 	}
 	if r.opts.RunnerToken != "glrt-resume" {
@@ -33,44 +49,27 @@ func TestEnsureGLRTInteractive_repromptsOnResume(t *testing.T) {
 	}
 }
 
-func TestEnsureGLRTInteractive_skipsWhenKeyringHit(t *testing.T) {
+func TestResetRunnerGLRTIfNeeded_skipsWhenKeyringHit(t *testing.T) {
 	mem := operatorconfig.NewMemKeyring()
 	if err := config.StoreRunnerTokenByTag("lab", "glrt-saved", mem); err != nil {
 		t.Fatal(err)
 	}
-	pr := &recordingPrompter{}
 	cp := &state.Checkpoint{RunnerID: 3}
-	r := &Runner{opts: Options{Keyring: mem, TagList: []string{"lab"}}}
-	if err := r.ensureGLRTInteractive(context.Background(), pr, cp); err != nil {
+	r := &Runner{
+		exec: resetGLRTExec{},
+		opts: Options{Keyring: mem, TagList: []string{"lab"}},
+		cfg:  &config.UserConfig{GitLabURL: "https://gitlab.com"},
+	}
+	if err := r.loadGLRTIntoOpts(cp.RunnerID, cp); err != nil {
 		t.Fatal(err)
 	}
-	if pr.passwordN != 0 {
-		t.Fatal("should not prompt")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := r.resetRunnerGLRTIfNeeded(ctx, cp); err != nil {
+		t.Fatal(err)
 	}
 	if r.opts.RunnerToken != "glrt-saved" {
 		t.Fatalf("token %q", r.opts.RunnerToken)
-	}
-}
-
-func TestEnsureGLRTInteractive_resumeEmptyFails(t *testing.T) {
-	mem := operatorconfig.NewMemKeyring()
-	pr := &recordingPrompter{passwords: []string{""}}
-	cp := &state.Checkpoint{RunnerID: 9}
-	r := &Runner{opts: Options{Keyring: mem, TagList: []string{"lab"}}}
-	err := r.ensureGLRTInteractive(context.Background(), pr, cp)
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if errdefs.CodeOf(err) != errdefs.CodeInvalidScope {
-		t.Fatalf("code %v", errdefs.CodeOf(err))
-	}
-}
-
-func TestEnsureGLRTInteractive_nonInteractiveNoOp(t *testing.T) {
-	cp := &state.Checkpoint{RunnerID: 9}
-	r := &Runner{opts: Options{NonInteractive: true}}
-	if err := r.ensureGLRTInteractive(context.Background(), nil, cp); err != nil {
-		t.Fatal(err)
 	}
 }
 

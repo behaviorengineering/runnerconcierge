@@ -23,7 +23,6 @@ func (r *Runner) promptSetupOptions(ctx context.Context, pr prompt.Prompter, cp 
 		return nil
 	}
 	skipScope := strings.TrimSpace(r.opts.RunnerToken) != ""
-	client := gitlabrunner.NewClient(r.gitlabURL(), r.exec, nil)
 
 	if !skipScope && r.effectiveRunnerType() == "" {
 		idx, err := pr.Select(ctx, "Register runner for", []string{
@@ -47,12 +46,14 @@ func (r *Runner) promptSetupOptions(ctx context.Context, pr prompt.Prompter, cp 
 		switch r.effectiveRunnerType() {
 		case runnerTypeGroup:
 			if strings.TrimSpace(r.opts.GroupPath) == "" && r.preset.GroupID <= 0 {
+				client := gitlabrunner.NewClient(r.gitlabURL(), r.exec, nil)
 				if err := r.promptGroup(ctx, pr, client); err != nil {
 					return err
 				}
 			}
 		case runnerTypeProject:
 			if strings.TrimSpace(r.opts.ProjectPath) == "" && strings.TrimSpace(r.preset.RepoPath) == "" {
+				client := gitlabrunner.NewClient(r.gitlabURL(), r.exec, nil)
 				if err := r.promptProject(ctx, pr, client); err != nil {
 					return err
 				}

@@ -116,5 +116,65 @@ func (g *listRunnersFailExec) RunJSON(ctx context.Context, name string, args ...
 	return g.Run(ctx, name, args...)
 }
 
+type resetTokenExec struct{}
+
+func (resetTokenExec) LookPath(name string) (string, error) { return name, nil }
+func (resetTokenExec) RunJSON(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return resetTokenExec{}.Run(ctx, name, args...)
+}
+func (resetTokenExec) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if name == "glab" && len(args) >= 4 && args[0] == "api" && args[1] == "--method" && args[2] == "POST" &&
+		args[3] == "runners/57039107/reset_authentication_token" {
+		return []byte(`{"token":"glrt-test"}`), nil
+	}
+	if name == "glab" && len(args) == 2 && args[0] == "api" && args[1] == "user" {
+		return []byte(`{"id":1,"username":"tester"}`), nil
+	}
+	return nil, nil
+}
+
+func TestResetAuthenticationToken_glab(t *testing.T) {
+	client := NewClient("https://gitlab.com", resetTokenExec{}, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	tok, err := client.ResetAuthenticationToken(ctx, 57039107)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tok != "glrt-test" {
+		t.Fatalf("token %q", tok)
+	}
+}
+
+func TestResetAuthenticationToken_emptyTokenFails(t *testing.T) {
+	client := NewClient("https://gitlab.com", emptyResetExec{}, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := client.ResetAuthenticationToken(ctx, 1)
+	if err == nil {
+		t.Fatal("expected error for empty token response")
+	}
+}
+
+type emptyResetExec struct{}
+
+func (emptyResetExec) LookPath(name string) (string, error) { return name, nil }
+func (emptyResetExec) RunJSON(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return emptyResetExec{}.Run(ctx, name, args...)
+}
+func (emptyResetExec) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return []byte(`{"token":""}`), nil
+}
+
+func TestWhoAmI_returnsID(t *testing.T) {
+	client := NewClient("https://gitlab.com", resetTokenExec{}, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	u, err := client.WhoAmI(ctx)
+	if err != nil || u.ID != 1 || u.Username != "tester" {
+		t.Fatalf("user %+v err %v", u, err)
+	}
+}
+
 // ensure fakeExec satisfies interface at compile time
 var _ gitexec.Exec = (*fakeExec)(nil)

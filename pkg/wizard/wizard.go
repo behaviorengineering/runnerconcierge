@@ -47,7 +47,7 @@ type Options struct {
 
 // Runner orchestrates setup stages.
 type Runner struct {
-	exec   *gitexec.Runner
+	exec   gitexec.Exec
 	cfg    *config.UserConfig
 	store  *state.Store
 	preset preset.Preset
@@ -136,7 +136,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	if err := r.promptCanonicalTag(ctx, pr, cp); err != nil {
 		return err
 	}
-	if err := r.promptCredentials(ctx, pr, cp.RunnerID, cp); err != nil {
+	if err := r.hydrateRunnerToken(cp); err != nil {
 		return err
 	}
 	if len(r.opts.TagList) > 0 {
@@ -188,11 +188,24 @@ func (r *Runner) Run(ctx context.Context) error {
 		return err
 	}
 
+	var glUser gitlabrunner.GitLabUser
+	if !r.hasRunnerToken(cp) {
+		glUser, err = r.ensureLoggedIn(ctx, pr)
+		if err != nil {
+			return err
+		}
+	}
+
 	if err := r.promptSetupOptions(ctx, pr, cp); err != nil {
 		return err
 	}
-	if err := r.ensureGLRTInteractive(ctx, pr, cp); err != nil {
-		return err
+	if !r.hasRunnerToken(cp) {
+		if err := r.ensureRunnerAccess(ctx, glUser, cp); err != nil {
+			return err
+		}
+		if err := r.resetRunnerGLRTIfNeeded(ctx, cp); err != nil {
+			return err
+		}
 	}
 
 	token, runnerID, err := r.resolveRegisterToken(ctx, cp)

@@ -130,17 +130,23 @@ PROHIBITED:
 
 ### Runner token (glrt) and checkpoint resume
 
-Interactive `runners gitlab setup` runs an **identity** step **before** doctor and tool install: hydrate empty flags from `state.json` (tags, executor, `repo_path`, `group_path`), then **runner tag**, then **glrt** (hidden). Leave glrt empty to create a new runner via GitLab API. Store glrt in the OS keyring (service `runnerconcierge`) **before** register. If checkpoint has `runner_id` but keyring miss, setup **reprompts** for glrt before register (TTY only).
+Interactive `runners gitlab setup` does **not** ask for a PAT or paste glrt from the GitLab UI.
+
+1. After `glab` is installed: `glab auth login` when `glab api user` fails (confirm in TTY).
+2. Pick `--group` / `--repo` (or the picker; lists only namespaces where you are **Maintainer+**).
+3. GitLab API **creates** or **resets** the runner token; store glrt in the OS keyring before `gitlab-runner register`.
+
+Hosts **without** a GitLab account: a member sends `glrt`; run setup with `--token` (skips login and API mint).
 
 | Account / env | When |
 |---------------|------|
-| `GITLAB_RUNNER_TOKEN_<tag>` | Primary: glrt for canonical tag (first `--tag-list` or interactive tag prompt) |
-| `GITLAB_RUNNER_TOKEN_<id>` | Also written after `POST /user/runners` for resume by runner id |
+| `GITLAB_RUNNER_TOKEN_<tag>` | glrt for canonical tag |
+| `GITLAB_RUNNER_TOKEN_<id>` | glrt keyed by GitLab runner id |
+| `--token` | Sent glrt for non-member hosts |
 | `GITLAB_RUNNER_TOKEN` | Legacy pending slot (read-only fallback) |
-| `GITLAB_TOKEN` | PAT for create_runner (optional; glab auth may suffice) |
 
-- MUST: skip the glrt prompt when `--token`, env, or keyring already has the token for that tag (save-and-forget)
-- MUST: resume failed setup using checkpoint `runner_id` plus keyring glrt; `state.json` stays redacted (no tokens)
+- MUST: skip login and API mint when `--token` or keyring already has glrt
+- MUST: resume with `runner_id` and empty keyring resets token via API (not UI paste)
 - MUST NOT: echo or log glrt values
 - `--fresh` archives checkpoint only; it does not delete keyring entries
 

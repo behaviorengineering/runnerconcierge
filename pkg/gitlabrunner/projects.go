@@ -28,7 +28,7 @@ func (c *Client) ListMemberProjects(ctx context.Context) ([]MemberProject, error
 	}
 	var out []MemberProject
 	for page := 1; page <= 10; page++ {
-		q := "projects?membership=true&simple=true&per_page=100&order_by=last_activity_at&page=" + itoa(page)
+		q := "projects?membership=true&min_access_level=40&simple=true&per_page=100&order_by=last_activity_at&page=" + itoa(page)
 		raw, err := c.Exec.Run(ctx, "glab", "api", q)
 		if err != nil {
 			return nil, errdefs.New(listMemberProjectsOp, errdefs.CodeCreateFailed, glabFailureMessage(err), err)

@@ -27,7 +27,7 @@ func (c *Client) ListMemberGroups(ctx context.Context) ([]MemberGroup, error) {
 	}
 	var out []MemberGroup
 	for page := 1; page <= 10; page++ {
-		q := "groups?membership=true&per_page=100&page=" + itoa(page)
+		q := "groups?membership=true&min_access_level=40&per_page=100&page=" + itoa(page)
 		raw, err := c.Exec.Run(ctx, "glab", "api", q)
 		if err != nil {
 			return nil, errdefs.New(listMemberGroupsOp, errdefs.CodeCreateFailed, glabFailureMessage(err), err)

@@ -2,20 +2,26 @@ package wizard
 
 import (
 	"context"
-	"strings"
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/behaviorengineering/operatorconfig/pkg/operatorconfig"
 	"github.com/behaviorengineering/runnerconcierge/internal/config"
-	"github.com/behaviorengineering/runnerconcierge/pkg/prompt"
+	"github.com/behaviorengineering/runnerconcierge/pkg/errdefs"
+	"github.com/behaviorengineering/runnerconcierge/pkg/state"
 )
 
 type recordingPrompter struct {
 	passwords []string
 	passwordN int
+	confirm   bool
 }
 
 func (r *recordingPrompter) Confirm(ctx context.Context, title string) (bool, error) {
+	if title == glabLoginConfirmTitle {
+		return r.confirm, nil
+	}
 	return true, nil
 }
 
@@ -36,62 +42,90 @@ func (r *recordingPrompter) Select(ctx context.Context, title string, options []
 	return 0, nil
 }
 
-func TestPromptCredentialsAsksGLRTFirst(t *testing.T) {
-	mem := operatorconfig.NewMemKeyring()
-	pr := &recordingPrompter{passwords: []string{"glrt-paste"}}
-	r := &Runner{
-		opts: Options{Keyring: mem, TagList: []string{"homelab-mac"}},
+type loginExec struct {
+	loginCalls int
+}
+
+func (l *loginExec) LookPath(name string) (string, error) { return name, nil }
+func (l *loginExec) RunJSON(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return l.Run(ctx, name, args...)
+}
+func (l *loginExec) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if name == "glab" && len(args) >= 1 && args[0] == "auth" {
+		l.loginCalls++
+		return nil, nil
 	}
-	if err := r.promptCredentials(context.Background(), pr, 0, nil); err != nil {
-		t.Fatal(err)
+	if name == "glab" && len(args) == 2 && args[0] == "api" && args[1] == "user" {
+		if l.loginCalls == 0 {
+			return nil, errLoginExec("not logged in")
+		}
+		return json.Marshal(map[string]any{"id": 9, "username": "mindhoc"})
 	}
-	if r.opts.RunnerToken != "glrt-paste" {
-		t.Fatalf("token %q", r.opts.RunnerToken)
-	}
-	if pr.passwordN != 1 {
-		t.Fatalf("password calls %d", pr.passwordN)
-	}
-	got, err := config.LoadRunnerTokenByTag("homelab-mac", mem)
-	if err != nil || got != "glrt-paste" {
-		t.Fatalf("tag store %q err %v", got, err)
+	return nil, nil
+}
+
+type errLoginExec string
+
+func (e errLoginExec) Error() string { return string(e) }
+
+func testRunner(exec *loginExec) *Runner {
+	return &Runner{
+		exec: exec,
+		opts: Options{},
+		cfg:  &config.UserConfig{GitLabURL: "https://gitlab.com"},
 	}
 }
 
-func TestPromptCredentialsSkipsWhenKeyringSet(t *testing.T) {
+func TestHydrateRunnerTokenSkipsWhenKeyringSet(t *testing.T) {
 	mem := operatorconfig.NewMemKeyring()
 	if err := config.StoreRunnerTokenByTag("lab", "glrt-saved", mem); err != nil {
 		t.Fatal(err)
 	}
-	pr := &recordingPrompter{}
 	r := &Runner{opts: Options{Keyring: mem, TagList: []string{"lab"}}}
-	if err := r.promptCredentials(context.Background(), pr, 0, nil); err != nil {
+	if err := r.hydrateRunnerToken(&state.Checkpoint{}); err != nil {
 		t.Fatal(err)
-	}
-	if pr.passwordN != 0 {
-		t.Fatal("should not prompt")
 	}
 	if r.opts.RunnerToken != "glrt-saved" {
 		t.Fatalf("token %q", r.opts.RunnerToken)
 	}
 }
 
-func TestPromptCredentialsEmptyDoesNotStore(t *testing.T) {
-	mem := operatorconfig.NewMemKeyring()
-	pr := &recordingPrompter{passwords: []string{""}}
-	r := &Runner{opts: Options{Keyring: mem, TagList: []string{"lab"}}}
-	if err := r.promptCredentials(context.Background(), pr, 0, nil); err != nil {
+func TestEnsureLoggedIn_runsGlabAuthLogin(t *testing.T) {
+	exec := &loginExec{}
+	r := testRunner(exec)
+	pr := &recordingPrompter{confirm: true}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	user, err := r.ensureLoggedIn(ctx, pr)
+	if err != nil {
 		t.Fatal(err)
 	}
-	got, _ := config.LoadRunnerTokenByTag("lab", mem)
-	if got != "" {
-		t.Fatalf("unexpected tag store %q", got)
+	if user.ID != 9 || exec.loginCalls != 1 {
+		t.Fatalf("user %+v loginCalls %d", user, exec.loginCalls)
+	}
+	if pr.passwordN != 0 {
+		t.Fatalf("password calls %d", pr.passwordN)
 	}
 }
 
-func TestPromptCredentialsGLRTTitle(t *testing.T) {
-	var ni prompt.NonInteractive
-	_, err := ni.Password(context.Background(), glrtPasswordTitle)
-	if err == nil || !strings.Contains(glrtPasswordTitle, "glrt") {
-		t.Fatalf("title %q err %v", glrtPasswordTitle, err)
+func TestEnsureLoggedIn_declineConfirmFails(t *testing.T) {
+	r := testRunner(&loginExec{})
+	pr := &recordingPrompter{confirm: false}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := r.ensureLoggedIn(ctx, pr)
+	if err == nil || errdefs.CodeOf(err) != errdefs.CodeAuthRequired {
+		t.Fatalf("err %v", err)
+	}
+}
+
+func TestEnsureLoggedIn_nonInteractiveFails(t *testing.T) {
+	r := testRunner(&loginExec{})
+	r.opts.NonInteractive = true
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := r.ensureLoggedIn(ctx, nil)
+	if err == nil || errdefs.CodeOf(err) != errdefs.CodeAuthRequired {
+		t.Fatalf("err %v", err)
 	}
 }

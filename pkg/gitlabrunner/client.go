@@ -146,25 +146,83 @@ func (c *Client) createHTTP(ctx context.Context, req CreateRunnerRequest, pat st
 	return parsed.ID, parsed.Token, nil
 }
 
-// WhoAmI returns the authenticated GitLab username via glab.
-func (c *Client) WhoAmI(ctx context.Context) (string, error) {
+// GitLabUser is the authenticated GitLab account from glab.
+type GitLabUser struct {
+	ID       int    `json:"id"`
+	Username string `json:"username"`
+}
+
+// WhoAmI returns the authenticated GitLab user via glab.
+func (c *Client) WhoAmI(ctx context.Context) (GitLabUser, error) {
+	if c == nil {
+		return GitLabUser{}, errdefs.New("WhoAmI", errdefs.CodeCreateFailed, "client is nil", nil)
+	}
 	if _, ok := ctx.Deadline(); !ok {
-		return "", errdefs.New("WhoAmI", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+		return GitLabUser{}, errdefs.New("WhoAmI", errdefs.CodeMissingDeadline, "context missing deadline", nil)
 	}
 	out, err := c.Exec.Run(ctx, "glab", "api", "user")
 	if err != nil {
-		return "", errdefs.New("WhoAmI", errdefs.CodeAuthUnauthorized, "glab user", err)
+		return GitLabUser{}, errdefs.New("WhoAmI", errdefs.CodeAuthUnauthorized, "glab user", err)
 	}
-	var u struct {
-		Username string `json:"username"`
-	}
+	var u GitLabUser
 	if err := json.Unmarshal(out, &u); err != nil {
-		return "", err
+		return GitLabUser{}, errdefs.New("WhoAmI", errdefs.CodeAuthUnauthorized, "parse glab user", err)
 	}
-	if u.Username == "" {
-		return "", errdefs.New("WhoAmI", errdefs.CodeAuthRequired, "not logged in; run glab auth login", nil)
+	if u.ID <= 0 || strings.TrimSpace(u.Username) == "" {
+		return GitLabUser{}, errdefs.New("WhoAmI", errdefs.CodeAuthRequired, "not logged in; run glab auth login", nil)
 	}
-	return u.Username, nil
+	return u, nil
+}
+
+// AuthLogin runs glab auth login for the configured GitLab host.
+func (c *Client) AuthLogin(ctx context.Context) error {
+	if c == nil {
+		return errdefs.New("AuthLogin", errdefs.CodeCreateFailed, "client is nil", nil)
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		return errdefs.New("AuthLogin", errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	args := []string{"auth", "login"}
+	host := GitLabHostFromBase(c.BaseURL)
+	if host != "" && !strings.EqualFold(host, "gitlab.com") {
+		args = append(args, "--hostname", host)
+	}
+	if _, err := c.Exec.Run(ctx, "glab", args...); err != nil {
+		return errdefs.New("AuthLogin", errdefs.CodeAuthUnauthorized, "glab auth login failed", err)
+	}
+	return nil
+}
+
+// ResetAuthenticationToken mints a new glrt for an existing GitLab runner id.
+func (c *Client) ResetAuthenticationToken(ctx context.Context, runnerID int) (string, error) {
+	if c == nil {
+		return "", errdefs.New(resetRunnerTokenOp, errdefs.CodeCreateFailed, "client is nil", nil)
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		return "", errdefs.New(resetRunnerTokenOp, errdefs.CodeMissingDeadline, "context missing deadline", nil)
+	}
+	if runnerID <= 0 {
+		return "", errdefs.New(resetRunnerTokenOp, errdefs.CodeInvalidScope, "runner id is required", nil)
+	}
+	out, err := c.Exec.Run(ctx, "glab", "api", "--method", "POST", fmt.Sprintf("runners/%d/reset_authentication_token", runnerID))
+	if err != nil {
+		msg := glabFailureMessage(err)
+		low := strings.ToLower(err.Error())
+		if strings.Contains(strings.ToLower(msg), "forbidden") || strings.Contains(low, "http 403") {
+			return "", errdefs.New(resetRunnerTokenOp, errdefs.CodeAuthScopeInsufficient, msg, err)
+		}
+		return "", newResetErr(msg, err)
+	}
+	var resp struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return "", newResetErr("parse response", err)
+	}
+	if strings.TrimSpace(resp.Token) == "" {
+		return "", newResetErr("empty token in response", nil)
+	}
+	return resp.Token, nil
 }
 
 // RunnerInfo is a project runner summary.
