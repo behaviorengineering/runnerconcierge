@@ -145,9 +145,11 @@ Hosts **without** a GitLab account: a member sends `glrt`; run setup with `--tok
 | `--token` | Sent glrt for non-member hosts |
 | `GITLAB_RUNNER_TOKEN` | Legacy pending slot (read-only fallback) |
 
-- MUST: skip login and API mint when `--token` or keyring already has glrt
+- MUST: skip login and API mint when `--token` is set, or when checkpoint has `runner_id` and the identity or id keyring slot has glrt
+- MUST NOT: reuse tag-only, pending, or identity keyring glrt when `runner_id` is 0 (mint via GitLab API unless `--token`)
 - MUST: when checkpoint has `runner_id`, skip group/tag/executor setup prompts; backfill `group_path` / `repo_path` from `glab api runners/:id` when missing
 - MUST: resume with `runner_id` and empty keyring resets token via API (not UI paste)
+- MUST: when `gitlab-runner register` reports the token is not valid, reset that runner's token if `runner_id` is set, otherwise create a new runner, then register once more
 - MUST NOT: echo or log glrt values
 - `--fresh` archives checkpoint only; it does not delete keyring entries
 - WHEN `state.json` has `stage=done`, archive it and start a **new** runner setup (do not verify-only-exit; do not ask to resume an incomplete setup)

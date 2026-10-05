@@ -105,6 +105,41 @@ func TestResolveRegisterTokenFlagStoresIdentity(t *testing.T) {
 	}
 }
 
+func TestResolveRegisterTokenIgnoresTagKeyringWhenNoRunnerID(t *testing.T) {
+	mem := operatorconfig.NewMemKeyring()
+	if err := config.StoreRunnerTokenByTag("lab", "glrt-stale", mem); err != nil {
+		t.Fatal(err)
+	}
+	cp := &state.Checkpoint{GroupPath: "acme", Tags: []string{"lab"}}
+	opts := Options{GroupPath: "acme", TagList: []string{"lab"}}
+	create := func(ctx context.Context) (int, string, error) {
+		return 99, "glrt-new", nil
+	}
+	got, id, err := resolveRegisterToken(context.Background(), opts, cp, mem, create)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "glrt-new" || id != 99 {
+		t.Fatalf("token=%q id=%d", got, id)
+	}
+}
+
+func TestLoadStoredRunnerGLRT_skipsTagWhenIdentityKnown(t *testing.T) {
+	mem := operatorconfig.NewMemKeyring()
+	if err := config.StoreRunnerTokenByTag("lab", "glrt-stale", mem); err != nil {
+		t.Fatal(err)
+	}
+	cp := &state.Checkpoint{RunnerID: 12, GroupPath: "acme", Tags: []string{"lab"}}
+	opts := Options{GroupPath: "acme", TagList: []string{"lab"}}
+	got, err := loadStoredRunnerGLRT(opts, cp, mem)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Fatalf("token %q", got)
+	}
+}
+
 func TestResolveRegisterTokenCreateError(t *testing.T) {
 	mem := operatorconfig.NewMemKeyring()
 	cp := &state.Checkpoint{GroupPath: "acme", Tags: []string{"lab"}}

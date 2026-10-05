@@ -219,25 +219,11 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
-	token, runnerID, err := r.resolveRegisterToken(ctx, cp)
+	token, _, err := r.resolveRegisterToken(ctx, cp)
 	if err != nil {
 		return err
 	}
-
-	regArgs, err := gitlabrunner.BuildRegisterArgv(gitlabrunner.RegisterArgs{
-		URL:              r.gitlabURL(),
-		Token:            token,
-		Name:             r.runnerName(cp),
-		Executor:         r.executor(),
-		ConfigPath:       cfgPath,
-		WorkingDirectory: workDir,
-		DockerImage:      r.dockerImage(),
-	})
-	if err != nil {
-		return err
-	}
-	client := gitlabrunner.NewClient(r.gitlabURL(), r.exec, nil)
-	if err := client.Register(ctx, runnerBin, regArgs); err != nil {
+	if err := r.registerWithRetry(ctx, pr, runnerBin, cp, token, cfgPath, workDir); err != nil {
 		return err
 	}
 	cp.Completed = appendUnique(cp.Completed, "register")
@@ -273,7 +259,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		_ = r.store.Save(cp)
 	}
 
-	if err := r.verifyRunnerOnlineOnGitLab(ctx, runnerID); err != nil {
+	if err := r.verifyRunnerOnlineOnGitLab(ctx, cp.RunnerID); err != nil {
 		return err
 	}
 	cp.Completed = appendUnique(cp.Completed, "verify")

@@ -60,7 +60,7 @@ runnerconcierge runners gitlab setup --non-interactive --yes \
   --repo group/project --tag-list my-tag --pat "$GITLAB_TOKEN"
 ```
 
-Resume after a failed register: `state.json` keeps runner id, tags, executor, and project/group paths (no glrt). Setup uses `glab auth login` and API create/reset for glrt. The keyring stores `GITLAB_RUNNER_TOKEN_<identity>` where identity is `parent-tag-hostname` (same string as GitLab description and `config.toml` name). Legacy `GITLAB_RUNNER_TOKEN_<id>` / `<tag>` entries are read as fallback. Non-interactive: pass `--token` or env.
+Resume after a failed register: `state.json` keeps runner id, tags, executor, and project/group paths (no glrt). Setup uses `glab auth login` and API create/reset for glrt. The keyring stores `GITLAB_RUNNER_TOKEN_<identity>` where identity is `parent-tag-hostname` (same string as GitLab description and `config.toml` name). Keyring glrt is reused only when `state.json` has a `runner_id`; a new setup mints a token unless you pass `--token`. If register reports the token is not valid, setup resets or creates once and retries. Legacy `GITLAB_RUNNER_TOKEN_<id>` / `<tag>` entries are read as fallback only while resuming that runner id.
 
 ## Forge setup
 

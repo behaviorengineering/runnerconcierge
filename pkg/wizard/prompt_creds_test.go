@@ -76,16 +76,36 @@ func testRunner(exec *loginExec) *Runner {
 	}
 }
 
-func TestHydrateRunnerTokenSkipsWhenKeyringSet(t *testing.T) {
+func TestHydrateRunnerToken_skipsTagWithoutRunnerID(t *testing.T) {
 	mem := operatorconfig.NewMemKeyring()
 	if err := config.StoreRunnerTokenByTag("lab", "glrt-saved", mem); err != nil {
 		t.Fatal(err)
 	}
-	r := &Runner{opts: Options{Keyring: mem, TagList: []string{"lab"}}}
-	if err := r.hydrateRunnerToken(&state.Checkpoint{}); err != nil {
+	r := &Runner{opts: Options{Keyring: mem, TagList: []string{"lab"}, GroupPath: "acme"}}
+	if err := r.hydrateRunnerToken(&state.Checkpoint{GroupPath: "acme", Tags: []string{"lab"}}); err != nil {
 		t.Fatal(err)
 	}
-	if r.opts.RunnerToken != "glrt-saved" {
+	if r.opts.RunnerToken != "" {
+		t.Fatalf("token %q", r.opts.RunnerToken)
+	}
+}
+
+func TestHydrateRunnerToken_loadsIdentityWithRunnerID(t *testing.T) {
+	mem := operatorconfig.NewMemKeyring()
+	cp := &state.Checkpoint{RunnerID: 55, GroupPath: "acme", Tags: []string{"lab"}}
+	opts := Options{Keyring: mem, TagList: []string{"lab"}, GroupPath: "acme"}
+	identity, err := runnerIdentityFor(opts, cp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := config.StoreRunnerTokenByIdentity(identity, "glrt-id", mem); err != nil {
+		t.Fatal(err)
+	}
+	r := &Runner{opts: opts}
+	if err := r.hydrateRunnerToken(cp); err != nil {
+		t.Fatal(err)
+	}
+	if r.opts.RunnerToken != "glrt-id" {
 		t.Fatalf("token %q", r.opts.RunnerToken)
 	}
 }

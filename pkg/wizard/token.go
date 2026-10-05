@@ -19,6 +19,13 @@ func loadStoredRunnerGLRT(opts Options, cp *state.Checkpoint, kr operatorconfig.
 	if opts.IgnoreKeyringGLRT {
 		return "", nil
 	}
+	runnerID := 0
+	if cp != nil {
+		runnerID = cp.RunnerID
+	}
+	if runnerID <= 0 {
+		return "", nil
+	}
 	kr = config.KeyringOrDefault(kr)
 	identity, idErr := runnerIdentityFor(opts, cp)
 	if idErr == nil {
@@ -27,28 +34,24 @@ func loadStoredRunnerGLRT(opts Options, cp *state.Checkpoint, kr operatorconfig.
 			return tok, err
 		}
 	}
-	runnerID := 0
-	if cp != nil {
-		runnerID = cp.RunnerID
+	tok, err := config.LoadRunnerToken(runnerID, kr)
+	if err != nil {
+		return "", err
+	}
+	if tok != "" {
+		migrateRunnerGLRTToIdentity(identity, idErr, tok, kr)
+		return tok, nil
+	}
+	if idErr == nil {
+		return "", nil
 	}
 	tag := canonicalTag(opts, cp)
-	if runnerID > 0 {
-		tok, err := config.LoadRunnerToken(runnerID, kr)
-		if err != nil {
-			return "", err
-		}
-		if tok != "" {
-			migrateRunnerGLRTToIdentity(identity, idErr, tok, kr)
-			return tok, nil
-		}
-	}
 	if tag != "" {
 		tok, err := config.LoadRunnerTokenByTag(tag, kr)
 		if err != nil {
 			return "", err
 		}
 		if tok != "" {
-			migrateRunnerGLRTToIdentity(identity, idErr, tok, kr)
 			return tok, nil
 		}
 	}
