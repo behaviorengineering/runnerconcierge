@@ -27,6 +27,11 @@ func Render(w io.Writer, rep *Report) error {
 		if err := writef(w, "config: %s readable=%v system=%v runners=%d\n", c.Path, c.Readable, c.SystemPath, len(c.Runners)); err != nil {
 			return err
 		}
+		if c.Diagnostic != "" {
+			if err := writef(w, "  diagnostic: %s\n", redact.String(c.Diagnostic)); err != nil {
+				return err
+			}
+		}
 		for _, r := range c.Runners {
 			if err := writef(w, "  - name=%s url=%s executor=%s\n", r.Name, redact.String(r.URL), r.Executor); err != nil {
 				return err

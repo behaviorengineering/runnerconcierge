@@ -6,15 +6,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/behaviorengineering/gitvalet/pkg/gitexec"
 	"github.com/behaviorengineering/runnerconcierge/pkg/errdefs"
-)
-
-const (
-	defaultRoot       = "C:\\GitLab-Runner"
-	defaultConfigPath = "C:\\GitLab-Runner\\config.toml"
 )
 
 type windowsManager struct {
@@ -43,13 +39,14 @@ func (m *windowsManager) Install(ctx context.Context, opts InstallOpts) error {
 	if bin == "" {
 		bin, _ = m.exec.LookPath("gitlab-runner")
 	}
+	defaultConfig, defaultWork := windowsDefaultPaths()
 	cfg := opts.ConfigPath
 	if cfg == "" {
-		cfg = defaultConfigPath
+		cfg = defaultConfig
 	}
 	work := opts.WorkingDirectory
 	if work == "" {
-		work = defaultRoot
+		work = defaultWork
 	}
 	_ = os.MkdirAll(work, 0o755)
 	domainUser := formatWindowsUser(user)
@@ -207,7 +204,13 @@ func hardenACL(ctx context.Context, exec gitexec.Exec, dir string) error {
 
 // DefaultPaths returns Windows runner paths.
 func DefaultPaths() (config, work, binary string) {
-	return defaultConfigPath, defaultRoot, ""
+	config, work = windowsDefaultPaths()
+	return config, work, ""
+}
+
+func windowsDefaultPaths() (config, work string) {
+	work = filepath.Join(os.Getenv("LOCALAPPDATA"), "GitLab-Runner")
+	return filepath.Join(work, "config.toml"), work
 }
 
 // EnsureSingleProcess stops duplicate managers when possible.

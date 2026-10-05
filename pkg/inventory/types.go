@@ -32,6 +32,7 @@ type ConfigReport struct {
 	Path       string
 	Readable   bool
 	SystemPath bool
+	Diagnostic string
 	Runners    []RunnerEntry
 }
 

@@ -53,6 +53,7 @@ func Run(ctx context.Context, opts Options) (*Report, error) {
 		runners, err := parseConfigFile(p)
 		if err != nil {
 			cr.Readable = false
+			cr.Diagnostic = configDiagnostic(err)
 			rep.Findings = append(rep.Findings, classifyConfigPath(p, false, rep.Elevated)...)
 			rep.Configs = append(rep.Configs, cr)
 			continue
