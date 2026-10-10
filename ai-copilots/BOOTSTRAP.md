@@ -17,7 +17,7 @@
 
 IF `.cursor/skills/runnerconcierge-operator` or `.github/skills/runnerconcierge-operator` is missing, run wire-only **before** you operate.
 
-First commit in this clone: run `make hooks-install` (Lefthook) after wire verification in phase 4. That is separate from operate-time wire-if-missing.
+First commit in this clone: run `go tool task hooks-install` (Lefthook) after wire verification in phase 4. That is separate from operate-time wire-if-missing.
 
 ---
 
@@ -113,7 +113,7 @@ test -f "$MOD/ai-copilots/BOOTSTRAP.md"
 test -f "$MOD/ai-copilots/skills/runnerconcierge-operator/SKILL.md"
 test -f "$MOD/ai-copilots/skills/runnerconcierge-developer/SKILL.md"
 test -f "$MOD/ai-copilots/skills/gitlab-runner-cli/SKILL.md"
-make -C "$MOD" hooks-install
+go tool task --dir "" hooks-install
 ```
 
 Ask the user before committing host wiring (`.cursor/`, `.github/`, etc.).

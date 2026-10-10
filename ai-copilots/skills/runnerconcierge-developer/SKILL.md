@@ -28,7 +28,7 @@ description: >-
 - MUST: list `cleanup`, `runners gitlab list`, and `runners gitlab setup` in `printAgentGuide` / `printHelp`
 - MUST: `--yes` on `cleanup` be persistent so `cleanup install --yes` works
 - MUST NOT: treat `cleanup` as `service.Manager.Install` (that path talks to `gitlab-runner`)
-- Enforcement: `make smoke`; `cleanup --help` and `cleanup install --help` list `--yes`
+- Enforcement: `go tool task smoke`; `cleanup --help` and `cleanup install --help` list `--yes`
 - Violation: STOP, fix cobra flags, re-run smoke
 
 CORRECT:
@@ -93,10 +93,10 @@ CLI: `runners gitlab list` is the forge-scoped control plane (`service.Manager.S
 
 **CONSTRAINT:** MUST keep quality gates green before claiming a Go change done.
 
-- MUST: `gofmt`, `GOWORK=off go vet ./...`, `GOWORK=off go test -race -count=1 ./...`, `make smoke`
+- MUST: `gofmt`, `GOWORK=off go vet ./...`, `GOWORK=off go test -race -count=1 ./...`, `go tool task smoke`
 - MUST: GitLab API tests use `httptest` in `pkg/gitlabrunner`
 - MUST NOT: put host product paths or brand in this module
-- Enforcement: `make ci` locally when touching Go; smoke grep includes `cleanup --help`
+- Enforcement: `go tool task ci` locally when touching Go; smoke grep includes `cleanup --help`
 - Violation: STOP, fix, re-run gates
 
 ## Live e2e env
@@ -110,4 +110,4 @@ CLI: `runners gitlab list` is the forge-scoped control plane (`service.Manager.S
 | `RUNNERCONCIERGE_WINDOWS_PASSWORD` | Windows service install password for repair |
 | `E2E_LIVE_ARTIFACT_DIR` | Write inventory JSON traces |
 
-Workflow: `.github/workflows/e2e-live.yml` (`make e2e-live` only).
+Workflow: `.github/workflows/e2e-live.yml` (`go tool task e2e-live` only).
