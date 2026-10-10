@@ -16,7 +16,7 @@ IF this workspace has no `.cursor/skills/runnerconcierge-operator` (Cursor)
 or `.github/skills/runnerconcierge-operator` (GitHub Copilot Chat):
 execute [BOOTSTRAP.md](ai-copilots/BOOTSTRAP.md) in **wire mode**, then continue.
 Read skills by path even before wire.
-First commit in a clone: `make hooks-install` (Lefthook) plus wire; that is not a substitute for operate-time wire-if-missing.
+First commit in a clone: `go tool task hooks-install` (Lefthook) plus wire; that is not a substitute for operate-time wire-if-missing.
 
 Resolve this module when it is only a Go dependency:
 

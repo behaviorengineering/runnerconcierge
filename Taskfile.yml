@@ -1,0 +1,118 @@
+version: "3"
+
+vars:
+  BINARY: bin/runnerconcierge{{exeExt}}
+  THEME_ACCENT: '{{.OPERATOR_CLI_THEME_ACCENT | default "42"}}'
+  THEME_MARK: '{{.OPERATOR_CLI_THEME_MARK | default "214"}}'
+
+env:
+  GOWORK: "off"
+  FORCE_COLOR: "1"
+  TASK_COLOR: "true"
+  TASK_COLOR_GREEN: "38;5;{{.THEME_ACCENT}}"
+  TASK_COLOR_YELLOW: "38;5;{{.THEME_MARK}}"
+  TASK_COLOR_CYAN: "38;5;{{.THEME_MARK}}"
+
+tasks:
+  default:
+    desc: List local-dev tasks
+    silent: true
+    cmds:
+      - go tool task --list
+      - |
+        echo ""
+        echo "Next steps:"
+        echo "  1. go tool task init"
+        echo "  2. go tool task build"
+        echo "  3. go tool task smoke"
+        echo ""
+        echo "GitLab list/setup: bin/runnerconcierge runners gitlab list|setup"
+
+  build:
+    desc: Build runnerconcierge CLI into bin/
+    cmds:
+      - go build -o {{.BINARY}} ./cmd/runnerconcierge
+
+  test:
+    desc: Run unit tests with race detector
+    cmds:
+      - go test -race -count=1 ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - go tool golangci-lint run --timeout 5m ./cmd/... ./internal/... ./pkg/...
+
+  format:
+    desc: Format Go sources with gofumpt
+    cmds:
+      - go tool gofumpt -w .
+
+  tidy:
+    desc: Run go mod tidy
+    cmds:
+      - go mod tidy
+
+  format-check:
+    internal: true
+    cmds:
+      - |
+        unformatted=$(gofmt -l .)
+        if [ -n "$unformatted" ]; then
+          echo "$unformatted"
+          exit 1
+        fi
+
+  ci:
+    desc: CI aggregate (tidy, fmt check, vet, test, build, smoke)
+    deps: [tidy, format-check, vet, test, build, smoke]
+
+  hooks-install:
+    desc: Install .githooks/pre-commit
+    cmds:
+      - chmod +x .githooks/pre-commit
+      - git config core.hooksPath .githooks
+
+  init:
+    desc: Seed operator config (~/.config/runnerconcierge)
+    deps: [build]
+    cmds:
+      - ./{{.BINARY}} init
+
+  smoke:
+    desc: Smoke-test CLI surfaces
+    deps: [build]
+    cmds:
+      - |
+        ./{{.BINARY}} | grep -q 'Documentation for agents'
+        ./{{.BINARY}} help
+        ./{{.BINARY}} version
+        ./{{.BINARY}} doctor
+        ./{{.BINARY}} runners gitlab --help | grep -q 'GitLab runners'
+        ./{{.BINARY}} runners gitlab list --help | grep -q 'inspect'
+        ./{{.BINARY}} runners gitlab setup --help | grep -q 'resume'
+        ./{{.BINARY}} setup || test $? = 2
+        ./{{.BINARY}} cleanup --help | grep -q 'Prune stale'
+        ./{{.BINARY}} unknown || test $? = 2
+
+  e2e-live:
+    desc: Live status/repair E2E (darwin/windows; not PR CI)
+    cmds:
+      - go test -tags=e2e_live -count=1 -timeout 30m ./internal/e2elive/...
+
+  gitlab-list:
+    internal: true
+    deps: [build]
+    cmds:
+      - ./{{.BINARY}} runners gitlab list
+
+  gitlab-setup:
+    internal: true
+    deps: [build]
+    cmds:
+      - ./{{.BINARY}} runners gitlab setup

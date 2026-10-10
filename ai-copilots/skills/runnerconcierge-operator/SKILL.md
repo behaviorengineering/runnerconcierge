@@ -13,7 +13,7 @@ description: >-
 ## Start every task
 
 1. Follow [AGENTS.md](../../../AGENTS.md) wire-if-missing (BOOTSTRAP wire mode when IDE discovery links are absent), then confirm this checkout is `github.com/behaviorengineering/runnerconcierge` (`git rev-parse --show-toplevel`).
-2. Build when needed: `make build`.
+2. Build when needed: `go tool task build`.
 3. Prefer inspect commands before anything that stops, removes, or rebinds a unit.
 
 BOOTSTRAP wire is for IDE discovery links; it is not a substitute for `setup` when installing runners.
@@ -157,7 +157,7 @@ Hosts **without** a GitLab account: a member sends `glrt`; run setup with `--tok
 
 ## E2E live
 
-- Local: `E2E_LIVE_MODE=fixture make e2e-live` (Go fixture; no GitLab registration token)
+- Local: `E2E_LIVE_MODE=fixture go tool task e2e-live` (Go fixture; no GitLab registration token)
 - GitHub: manual **e2e-live** workflow (`workflow_dispatch`)
 - Refuses to seed if a gitlab-runner service already exists unless `E2E_LIVE_ALLOW_EXISTING=1`
 - `repair-prod` observe path: `E2E_LIVE_ALLOW_PROD=1` (not used on GHA)

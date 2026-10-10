@@ -47,7 +47,7 @@ jobs:
           E2E_LIVE_MODE: fixture
           E2E_LIVE_REQUIRE: "1"
           E2E_LIVE_ARTIFACT_DIR: ${{ runner.temp }}/e2e-artifacts
-        run: make e2e-live
+        run: go tool task e2e-live
 
       - name: Upload e2e artifacts
         if: always()
